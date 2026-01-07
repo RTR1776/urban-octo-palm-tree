@@ -182,6 +182,179 @@ export class ApiServer {
       }
     });
 
+    // NEW: Top 10 Most Active Markets (by trade count)
+    this.app.get('/api/top/most-active', async (req: Request, res: Response) => {
+      try {
+        const trades = await this.client.getAllRecentTrades(1000);
+        const marketActivity = new Map<string, {
+          market_id: string;
+          title: string;
+          tradeCount: number;
+          volume: number;
+          lastPrice: number;
+        }>();
+
+        trades.forEach(trade => {
+          const existing = marketActivity.get(trade.market_id);
+          const value = trade.size * trade.price;
+
+          if (existing) {
+            existing.tradeCount += 1;
+            existing.volume += value;
+            existing.lastPrice = trade.price;
+          } else {
+            marketActivity.set(trade.market_id, {
+              market_id: trade.market_id,
+              title: trade.title || 'Unknown Market',
+              tradeCount: 1,
+              volume: value,
+              lastPrice: trade.price,
+            });
+          }
+        });
+
+        const top = Array.from(marketActivity.values())
+          .sort((a, b) => b.tradeCount - a.tradeCount)
+          .slice(0, 10);
+
+        res.json(top);
+      } catch (error) {
+        console.error('Most active error:', error);
+        res.status(500).json({ error: 'Failed to fetch most active markets' });
+      }
+    });
+
+    // NEW: Top 10 New Whales (first-time large traders)
+    this.app.get('/api/top/new-whales', async (req: Request, res: Response) => {
+      try {
+        const trades = await this.client.getAllRecentTrades(1000);
+        const whaleMap = new Map<string, {
+          address: string;
+          totalVolume: number;
+          tradeCount: number;
+          largestTrade: number;
+          firstTradeTime: number;
+          markets: Set<string>;
+        }>();
+
+        trades.forEach(trade => {
+          if (!trade.trader_address) return;
+          const value = trade.size * trade.price;
+
+          const existing = whaleMap.get(trade.trader_address);
+          if (existing) {
+            existing.totalVolume += value;
+            existing.tradeCount += 1;
+            existing.largestTrade = Math.max(existing.largestTrade, value);
+            existing.markets.add(trade.market_id);
+          } else {
+            whaleMap.set(trade.trader_address, {
+              address: trade.trader_address,
+              totalVolume: value,
+              tradeCount: 1,
+              largestTrade: value,
+              firstTradeTime: trade.timestamp,
+              markets: new Set([trade.market_id]),
+            });
+          }
+        });
+
+        // Filter to new whales: few trades but high volume
+        const newWhales = Array.from(whaleMap.values())
+          .filter(w => w.tradeCount <= 5 && w.totalVolume >= 5000)
+          .map(w => ({
+            address: w.address,
+            totalVolume: w.totalVolume,
+            tradeCount: w.tradeCount,
+            largestTrade: w.largestTrade,
+            marketsCount: w.markets.size,
+            firstSeen: w.firstTradeTime,
+          }))
+          .sort((a, b) => b.totalVolume - a.totalVolume)
+          .slice(0, 10);
+
+        res.json(newWhales);
+      } catch (error) {
+        console.error('New whales error:', error);
+        res.status(500).json({ error: 'Failed to fetch new whales' });
+      }
+    });
+
+    // NEW: Top 10 Closing Today (markets resolving within 24h)
+    this.app.get('/api/top/closing-today', async (req: Request, res: Response) => {
+      try {
+        const closing = await this.client.getClosingSoonMarkets(24, 10);
+        const formatted = closing.map(m => ({
+          market_id: m.id,
+          question: m.question,
+          end_date: m.end_date,
+          volume: m.volume || 0,
+          price: m.tokens?.[0]?.price || 0.5,
+          hoursRemaining: Math.max(0, (new Date(m.end_date).getTime() - Date.now()) / (1000 * 60 * 60)),
+        }));
+        res.json(formatted);
+      } catch (error) {
+        console.error('Closing today error:', error);
+        res.status(500).json({ error: 'Failed to fetch closing markets' });
+      }
+    });
+
+    // NEW: Top 10 Price Movers (estimated from recent trade activity)
+    this.app.get('/api/top/price-movers', async (req: Request, res: Response) => {
+      try {
+        const trades = await this.client.getAllRecentTrades(1000);
+        const marketPrices = new Map<string, {
+          market_id: string;
+          title: string;
+          prices: number[];
+          volume: number;
+        }>();
+
+        // Group trades by market and collect prices
+        trades.forEach(trade => {
+          const existing = marketPrices.get(trade.market_id);
+          const value = trade.size * trade.price;
+
+          if (existing) {
+            existing.prices.push(trade.price);
+            existing.volume += value;
+          } else {
+            marketPrices.set(trade.market_id, {
+              market_id: trade.market_id,
+              title: trade.title || 'Unknown Market',
+              prices: [trade.price],
+              volume: value,
+            });
+          }
+        });
+
+        // Calculate price change for each market
+        const movers = Array.from(marketPrices.values())
+          .filter(m => m.prices.length >= 3) // Need enough trades to estimate
+          .map(m => {
+            const firstPrice = m.prices[m.prices.length - 1]; // Oldest
+            const lastPrice = m.prices[0]; // Newest
+            const priceChange = firstPrice > 0 ? ((lastPrice - firstPrice) / firstPrice) * 100 : 0;
+
+            return {
+              market_id: m.market_id,
+              title: m.title,
+              priceChange: priceChange,
+              currentPrice: lastPrice,
+              volume: m.volume,
+              tradeCount: m.prices.length,
+            };
+          })
+          .sort((a, b) => Math.abs(b.priceChange) - Math.abs(a.priceChange))
+          .slice(0, 10);
+
+        res.json(movers);
+      } catch (error) {
+        console.error('Price movers error:', error);
+        res.status(500).json({ error: 'Failed to fetch price movers' });
+      }
+    });
+
     // Whales endpoint - calculate from recent trades
     this.app.get('/api/whales', async (req: Request, res: Response) => {
       try {
