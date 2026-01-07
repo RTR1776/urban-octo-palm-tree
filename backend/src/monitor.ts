@@ -3,6 +3,13 @@ import { DatabaseService } from './database';
 import { Trade, WhaleActivity, Alert, MarketStats } from './types';
 import { NotificationService } from './notification-service';
 
+interface WalletAccumulator {
+  totalVolume: number;
+  tradeCount: number;
+  trades: { market: string; amount: number; side: string; timestamp: number }[];
+  firstSeen: number;
+}
+
 export class MonitorService {
   private client: PolymarketClient;
   private db: DatabaseService;
@@ -11,16 +18,39 @@ export class MonitorService {
   private largeMovementThreshold: number;
   private unusualVolumeMultiplier: number;
   private knownWhales: Set<string>;
+  
+  // Cumulative tracking settings
+  private cumulativeWhaleThreshold: number;
+  private cumulativeTradeMin: number;
+  private cumulativeWindowMs: number;
+  
+  // Track wallet activity within time window
+  private walletAccumulators: Map<string, WalletAccumulator> = new Map();
+  private alertedCumulativeWhales: Set<string> = new Set(); // Avoid duplicate alerts
 
   constructor(client: PolymarketClient, db: DatabaseService, notifications: NotificationService) {
     this.client = client;
     this.db = db;
     this.notifications = notifications;
+    
+    // Single trade thresholds
     this.whaleThreshold = parseFloat(process.env.WHALE_THRESHOLD || '10000');
     this.largeMovementThreshold = parseFloat(process.env.LARGE_MOVEMENT_THRESHOLD || '5000');
     this.unusualVolumeMultiplier = parseFloat(process.env.UNUSUAL_VOLUME_MULTIPLIER || '3');
+    
+    // Cumulative tracking (multiple smaller trades)
+    this.cumulativeWhaleThreshold = parseFloat(process.env.CUMULATIVE_WHALE_THRESHOLD || '25000');
+    this.cumulativeTradeMin = parseFloat(process.env.CUMULATIVE_TRADE_MIN || '2500');
+    this.cumulativeWindowMs = parseFloat(process.env.CUMULATIVE_WINDOW_HOURS || '1') * 60 * 60 * 1000;
+    
     this.knownWhales = new Set();
     this.loadKnownWhales();
+    
+    console.log(`🐋 Whale detection configured:`);
+    console.log(`   Single trade whale: $${this.whaleThreshold.toLocaleString()}`);
+    console.log(`   Large movement: $${this.largeMovementThreshold.toLocaleString()}`);
+    console.log(`   Cumulative whale: $${this.cumulativeWhaleThreshold.toLocaleString()} from trades >= $${this.cumulativeTradeMin.toLocaleString()}`);
+    console.log(`   Time window: ${this.cumulativeWindowMs / 3600000} hour(s)`);
   }
 
   private loadKnownWhales(): void {
@@ -33,6 +63,9 @@ export class MonitorService {
     console.log('Starting market monitoring cycle...');
 
     try {
+      // Clean up old wallet accumulators
+      this.cleanupAccumulators();
+      
       // Get all recent trades globally - this is more efficient
       const trades = await this.client.getAllRecentTrades(500);
       console.log(`Processing ${trades.length} recent trades...`);
@@ -46,7 +79,11 @@ export class MonitorService {
         const question = (trade as any).title || 'Unknown Market';
         this.analyzeTradeForWhaleActivity(trade, question);
         this.analyzeTradeForLargeMovement(trade, question);
+        this.trackCumulativeActivity(trade, question);
       }
+      
+      // Check for cumulative whales
+      this.checkCumulativeWhales();
 
       // Also get markets for stats
       const markets = await this.client.getMarkets(100, true);
@@ -55,6 +92,87 @@ export class MonitorService {
       await this.calculateMarketStats();
     } catch (error) {
       console.error('Error in monitoring cycle:', error);
+    }
+  }
+  
+  private cleanupAccumulators(): void {
+    const now = Date.now();
+    for (const [wallet, data] of this.walletAccumulators.entries()) {
+      // Remove entries older than the window
+      if (now - data.firstSeen > this.cumulativeWindowMs) {
+        this.walletAccumulators.delete(wallet);
+        this.alertedCumulativeWhales.delete(wallet);
+      }
+    }
+  }
+  
+  private trackCumulativeActivity(trade: Trade, question: string): void {
+    if (!trade.trader_address) return;
+    
+    const tradeValue = trade.size * trade.price;
+    
+    // Only track trades above minimum threshold
+    if (tradeValue < this.cumulativeTradeMin) return;
+    
+    // Skip if this is already a single-trade whale (already alerted)
+    if (tradeValue >= this.whaleThreshold) return;
+    
+    const wallet = trade.trader_address;
+    const now = Date.now();
+    
+    if (!this.walletAccumulators.has(wallet)) {
+      this.walletAccumulators.set(wallet, {
+        totalVolume: 0,
+        tradeCount: 0,
+        trades: [],
+        firstSeen: now,
+      });
+    }
+    
+    const accumulator = this.walletAccumulators.get(wallet)!;
+    accumulator.totalVolume += tradeValue;
+    accumulator.tradeCount += 1;
+    accumulator.trades.push({
+      market: question,
+      amount: tradeValue,
+      side: trade.side,
+      timestamp: trade.timestamp,
+    });
+  }
+  
+  private checkCumulativeWhales(): void {
+    for (const [wallet, data] of this.walletAccumulators.entries()) {
+      // Skip if already alerted
+      if (this.alertedCumulativeWhales.has(wallet)) continue;
+      
+      // Check if cumulative volume exceeds threshold
+      if (data.totalVolume >= this.cumulativeWhaleThreshold && data.tradeCount >= 2) {
+        this.alertedCumulativeWhales.add(wallet);
+        
+        // Build summary of their trades
+        const tradeSummary = data.trades
+          .slice(-5) // Last 5 trades
+          .map(t => `$${t.amount.toFixed(0)} ${t.side}`)
+          .join(', ');
+        
+        const uniqueMarkets = new Set(data.trades.map(t => t.market)).size;
+        
+        this.createAlert({
+          type: 'CUMULATIVE_WHALE',
+          severity: 'HIGH',
+          message: `🐋 Cumulative whale detected! ${this.formatAddress(wallet)} made ${data.tradeCount} trades totaling $${data.totalVolume.toFixed(2)} across ${uniqueMarkets} market(s) in the last hour. Recent: ${tradeSummary}`,
+          market_id: data.trades[data.trades.length - 1]?.market || 'multiple',
+          trader_address: wallet,
+          amount: data.totalVolume,
+          timestamp: Date.now(),
+          read: false,
+        });
+        
+        // Add to known whales
+        if (!this.knownWhales.has(wallet)) {
+          this.knownWhales.add(wallet);
+        }
+      }
     }
   }
 
