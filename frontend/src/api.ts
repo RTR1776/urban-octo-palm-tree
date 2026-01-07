@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { Alert, WhaleActivity, Market, Trade, MarketStats } from './types';
 
-const API_BASE = '/api';
+// Use environment variable for API URL, fallback to relative path for local dev
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export const api = {
   async getAlerts(unreadOnly = false): Promise<Alert[]> {

@@ -23,13 +23,41 @@ export class ApiServer {
   }
 
   private setupMiddleware(): void {
-    this.app.use(cors());
+    // CORS configuration for production
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ];
+    
+    this.app.use(cors({
+      origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, etc)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
+      credentials: true,
+    }));
     this.app.use(express.json());
   }
 
   private setupRoutes(): void {
+    // Health check for Fly.io
     this.app.get('/health', (req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: Date.now() });
+    });
+
+    this.app.get('/api/health', (req: Request, res: Response) => {
+      res.json({ 
+        status: 'ok', 
+        timestamp: Date.now(),
+        uptime: process.uptime(),
+        env: process.env.NODE_ENV || 'development',
+      });
     });
 
     this.app.get('/api/alerts', (req: Request, res: Response) => {
