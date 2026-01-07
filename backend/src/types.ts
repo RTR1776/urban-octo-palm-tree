@@ -42,9 +42,23 @@ export interface WhaleActivity {
   is_new_whale: boolean;
 }
 
+export type AlertType = 
+  | 'WHALE' 
+  | 'LARGE_MOVEMENT' 
+  | 'UNUSUAL_VOLUME' 
+  | 'NEW_WHALE'
+  | 'CUMULATIVE_WHALE'
+  | 'LARGE_TRADE'
+  | 'WHALE_TRADE'
+  | 'STACKING'
+  | 'COORDINATED_CLUSTER'
+  | 'PRICE_IMPACT'
+  | 'BOOK_WALKED'
+  | 'REVERSION';
+
 export interface Alert {
   id?: number;
-  type: 'WHALE' | 'LARGE_MOVEMENT' | 'UNUSUAL_VOLUME' | 'NEW_WHALE';
+  type: AlertType;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
   message: string;
   market_id?: string;

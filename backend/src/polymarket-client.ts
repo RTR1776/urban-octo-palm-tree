@@ -136,12 +136,12 @@ export class PolymarketClient {
 
   async getOrderBook(tokenId: string): Promise<OrderBookData | null> {
     try {
-      const response = await this.clobApi.get('/book', {
-        params: {
-          token_id: tokenId,
-        },
-      });
-      return response.data;
+      if (!this.clobClient) {
+        console.warn('CLOB client not initialized, cannot fetch order book');
+        return null;
+      }
+      const book = await this.clobClient.getOrderBook(tokenId);
+      return book as unknown as OrderBookData;
     } catch (error) {
       console.error(`Error fetching order book for token ${tokenId}:`, error);
       return null;
@@ -150,9 +150,10 @@ export class PolymarketClient {
 
   async getUserTrades(address: string, limit: number = 100): Promise<Trade[]> {
     try {
-      const response = await this.clobApi.get('/trades', {
+      // Use data API for user trades since CLOB client may not be initialized
+      const response = await this.dataApi.get('/trades', {
         params: {
-          maker_address: address,
+          user: address,
           limit,
         },
       });
