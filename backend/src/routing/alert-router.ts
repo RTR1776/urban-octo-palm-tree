@@ -88,10 +88,20 @@ export class AlertRouter {
    */
   private async sendCriticalAlert(event: ScoredEvent, escalated?: boolean): Promise<void> {
     const prefix = escalated ? '⬆️ ESCALATED ' : '';
-    const pingContent = `@everyone ${prefix}🚨 **CRITICAL ALERT** (Score: ${event.score})`;
+    const sideEmoji = event.trade?.side === 'BUY' ? '🟢' : '🔴';
+    const sideText = event.trade ? `${sideEmoji} ${event.trade.side}` : '';
+    const valueText = event.trade ? `$${event.trade.valueUsd.toFixed(0)}` : '';
+    const breakdown = this.formatScoreBreakdownCompact(event.scoreBreakdown);
+    
+    const content = [
+      `@everyone ${prefix}🚨 **CRITICAL ALERT** - ${this.getEventEmoji(event.type)} **${event.type}**`,
+      `**Score: ${event.score}** ${sideText} ${valueText}`,
+      `📊 ${breakdown}`,
+      `> ${event.shortMessage}`,
+    ].join('\n');
 
     await this.notifications.sendTieredAlert({
-      content: pingContent,
+      content,
       embeds: [this.buildEmbed(event, 0xFF0000)], // Red
     });
 
@@ -103,9 +113,20 @@ export class AlertRouter {
    */
   private async sendHighAlert(event: ScoredEvent, escalated?: boolean): Promise<void> {
     const prefix = escalated ? '⬆️ ' : '';
+    const sideEmoji = event.trade?.side === 'BUY' ? '🟢' : '🔴';
+    const sideText = event.trade ? `${sideEmoji} ${event.trade.side}` : '';
+    const valueText = event.trade ? `$${event.trade.valueUsd.toFixed(0)}` : '';
+    const breakdown = this.formatScoreBreakdownCompact(event.scoreBreakdown);
     
+    const content = [
+      `${prefix}${this.getEventEmoji(event.type)} **${event.type}** (Score: ${event.score})`,
+      `${sideText} ${valueText}`,
+      `📊 ${breakdown}`,
+      `> ${event.shortMessage}`,
+    ].join('\n');
+
     await this.notifications.sendTieredAlert({
-      content: `${prefix}🐋 **${event.type}** (Score: ${event.score})`,
+      content,
       embeds: [this.buildEmbed(event, 0xFFA500)], // Orange
     });
 
@@ -180,40 +201,55 @@ export class AlertRouter {
     const duration = Date.now() - bucket.startTime;
     const minutes = Math.round(duration / 60000);
 
-    // Group by type
-    const byType = new Map<string, ScoredEvent[]>();
-    for (const event of events) {
-      if (!byType.has(event.type)) {
-        byType.set(event.type, []);
-      }
-      byType.get(event.type)!.push(event);
-    }
+    // Sort by score descending
+    const sortedEvents = [...events].sort((a, b) => b.score - a.score);
 
-    // Build summary
-    let summary = `📊 **Activity Digest** (${events.length} events in ${minutes} min)\n\n`;
+    // Build header
+    let summary = `📊 **Activity Digest** (${events.length} events in ${minutes} min)\n`;
+    summary += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-    for (const [type, typeEvents] of byType.entries()) {
-      const totalVolume = typeEvents.reduce(
-        (sum, e) => sum + (e.trade?.valueUsd || 0), 
-        0
-      );
-      const avgScore = Math.round(
-        typeEvents.reduce((sum, e) => sum + e.score, 0) / typeEvents.length
-      );
+    // Show individual events (up to 10)
+    const eventsToShow = sortedEvents.slice(0, 10);
+    
+    for (const e of eventsToShow) {
+      const sideEmoji = e.trade?.side === 'BUY' ? '🟢' : e.trade?.side === 'SELL' ? '🔴' : '⚪';
+      const sideText = e.trade?.side || 'N/A';
+      const valueText = e.trade ? `$${e.trade.valueUsd.toFixed(0)}` : '';
+      const priceText = e.trade ? `@ ${e.trade.price.toFixed(3)}` : '';
       
-      summary += `**${type}**: ${typeEvents.length} events, $${totalVolume.toFixed(0)} volume, avg score ${avgScore}\n`;
+      // Event header
+      summary += `${this.getEventEmoji(e.type)} **${e.type}** [${e.score}] ${sideEmoji} ${sideText} ${valueText} ${priceText}\n`;
+      
+      // Score breakdown (compact)
+      const breakdown = this.formatScoreBreakdownCompact(e.scoreBreakdown);
+      if (breakdown !== 'No factors') {
+        summary += `   └ ${breakdown}\n`;
+      }
+      
+      // Market context (shortened)
+      const marketName = e.market.question.length > 50 
+        ? e.market.question.slice(0, 50) + '...' 
+        : e.market.question;
+      summary += `   └ *${marketName}*\n\n`;
     }
 
-    // Top 3 events
-    const topEvents = events
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+    // If there are more events, show summary
+    if (events.length > 10) {
+      summary += `\n... and ${events.length - 10} more events\n`;
+    }
 
-    if (topEvents.length > 0) {
-      summary += `\n**Top Events:**\n`;
-      topEvents.forEach((e, i) => {
-        summary += `${i + 1}. [${e.score}] ${e.shortMessage}\n`;
-      });
+    // Volume summary by type
+    const byType = new Map<string, { count: number; volume: number }>();
+    for (const event of events) {
+      const existing = byType.get(event.type) || { count: 0, volume: 0 };
+      existing.count++;
+      existing.volume += event.trade?.valueUsd || 0;
+      byType.set(event.type, existing);
+    }
+
+    summary += `\n**Summary by Type:**\n`;
+    for (const [type, data] of byType.entries()) {
+      summary += `• ${type}: ${data.count}x ($${data.volume.toFixed(0)} vol)\n`;
     }
 
     await this.notifications.sendTieredAlert({
@@ -294,7 +330,7 @@ export class AlertRouter {
   }
 
   /**
-   * Format score breakdown for display
+   * Format score breakdown for display (detailed)
    */
   private formatScoreBreakdown(breakdown: ScoredEvent['scoreBreakdown']): string {
     const parts: string[] = [];
@@ -307,6 +343,45 @@ export class AlertRouter {
     if (breakdown.coordination > 0) parts.push(`Cluster: ${breakdown.coordination}`);
 
     return parts.join(' | ') || 'No breakdown';
+  }
+
+  /**
+   * Format score breakdown compactly with explanations
+   */
+  private formatScoreBreakdownCompact(breakdown: ScoredEvent['scoreBreakdown']): string {
+    const parts: string[] = [];
+    const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+    
+    // Only show significant contributors (>= 5 points)
+    if (breakdown.absoluteSize >= 5) {
+      parts.push(`💵 Size +${breakdown.absoluteSize}`);
+    }
+    if (breakdown.volumeRatio >= 5) {
+      parts.push(`📊 Vol% +${breakdown.volumeRatio}`);
+    }
+    if (breakdown.medianMultiple >= 5) {
+      parts.push(`📏 ${breakdown.medianMultiple}x median`);
+    }
+    if (breakdown.depthRatio >= 5) {
+      parts.push(`📉 Depth +${breakdown.depthRatio}`);
+    }
+    if (breakdown.priceImpact >= 5) {
+      parts.push(`📈 Impact +${breakdown.priceImpact}`);
+    }
+    if (breakdown.walkedBook >= 5) {
+      parts.push(`📚 Walked +${breakdown.walkedBook}`);
+    }
+    if (breakdown.reversion >= 5) {
+      parts.push(`↩️ Reversion +${breakdown.reversion}`);
+    }
+    if (breakdown.walletBehavior >= 5) {
+      parts.push(`👛 Wallet +${breakdown.walletBehavior}`);
+    }
+    if (breakdown.coordination >= 5) {
+      parts.push(`🕸️ Cluster +${breakdown.coordination}`);
+    }
+
+    return parts.length > 0 ? parts.join(' • ') : 'No factors';
   }
 
   /**

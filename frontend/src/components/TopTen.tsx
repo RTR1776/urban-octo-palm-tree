@@ -5,11 +5,13 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 interface TopTrader {
   address: string;
   volume: number;
+  tradeCount: number;
 }
 
 interface TopTrade {
   trader_address: string;
   market_id: string;
+  title: string;
   size: number;
   price: number;
   value: number;
@@ -106,13 +108,15 @@ export function TopTen() {
           <>
             {activeTab === 'traders' && (
               <div className="space-y-3">
-                {topTraders.map((trader, index) => (
+                {topTraders.length === 0 ? (
+                  <div className="text-center text-gray-400 py-4">No trader data available</div>
+                ) : topTraders.map((trader, index) => (
                   <div key={trader.address} className="flex items-center justify-between p-3 bg-gray-900 rounded">
                     <div className="flex items-center space-x-3">
                       <span className="text-2xl font-bold text-gray-600">#{index + 1}</span>
                       <div>
                         <p className="font-mono text-sm">{formatAddress(trader.address)}</p>
-                        <p className="text-xs text-gray-400">Last 24h</p>
+                        <p className="text-xs text-gray-400">{trader.tradeCount || 0} trades (recent)</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -125,13 +129,15 @@ export function TopTen() {
 
             {activeTab === 'markets' && (
               <div className="space-y-3">
-                {topMarkets.map((market, index) => (
+                {topMarkets.length === 0 ? (
+                  <div className="text-center text-gray-400 py-4">No market data available</div>
+                ) : topMarkets.map((market, index) => (
                   <div key={market.market_id} className="p-3 bg-gray-900 rounded">
                     <div className="flex items-start justify-between mb-2">
                       <span className="text-2xl font-bold text-gray-600">#{index + 1}</span>
                       <div className="text-right">
-                        <p className="font-bold text-green-400">${market.total_volume_24h.toFixed(2)}</p>
-                        <p className="text-xs text-gray-400">{market.trade_count_24h} trades</p>
+                        <p className="font-bold text-green-400">${market.total_volume_24h.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        <p className="text-xs text-gray-400">total volume</p>
                       </div>
                     </div>
                     <p className="text-sm text-gray-300 line-clamp-2">{market.question}</p>
@@ -142,7 +148,9 @@ export function TopTen() {
 
             {activeTab === 'trades' && (
               <div className="space-y-3">
-                {topTrades.map((trade, index) => (
+                {topTrades.length === 0 ? (
+                  <div className="text-center text-gray-400 py-4">No trade data available</div>
+                ) : topTrades.map((trade, index) => (
                   <div key={index} className="p-3 bg-gray-900 rounded">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-2xl font-bold text-gray-600">#{index + 1}</span>
@@ -151,16 +159,17 @@ export function TopTen() {
                         <p className="text-xs text-gray-400">{formatTime(trade.timestamp)}</p>
                       </div>
                     </div>
+                    <p className="text-sm text-gray-300 line-clamp-1 mb-2">{trade.title}</p>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-mono text-gray-300">{formatAddress(trade.trader_address)}</span>
+                      <span className="font-mono text-gray-400 text-xs">{formatAddress(trade.trader_address)}</span>
                       <span className={`px-2 py-1 rounded text-xs ${
                         trade.side === 'BUY' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
                       }`}>
                         {trade.side}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {trade.size.toFixed(2)} @ ${trade.price.toFixed(4)}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {trade.size.toFixed(2)} shares @ ${trade.price.toFixed(4)}
                     </p>
                   </div>
                 ))}

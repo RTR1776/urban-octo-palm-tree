@@ -6,17 +6,17 @@
 export const AlertConfig = {
   // Severity tiers and routing
   tiers: {
-    critical: { min: 80, max: 100, action: 'ping' },        // @everyone or role ping
-    high: { min: 60, max: 79, action: 'message' },          // Message, no ping
-    medium: { min: 40, max: 59, action: 'digest' },         // Batch into digest
-    low: { min: 0, max: 39, action: 'store' },              // Store only, no notification
+    critical: { min: 65, max: 100, action: 'ping' },        // @everyone or role ping
+    high: { min: 45, max: 64, action: 'message' },          // Message, no ping
+    medium: { min: 25, max: 44, action: 'digest' },         // Batch into digest
+    low: { min: 0, max: 24, action: 'store' },              // Store only, no notification
   },
 
   // Digest bucket settings
   digest: {
-    intervalMs: 15 * 60 * 1000,      // 15 minutes
+    intervalMs: 5 * 60 * 1000,       // 5 minutes
     maxEventsPerDigest: 15,
-    minEventsToSend: 5,              // Don't send digest with < 5 events
+    minEventsToSend: 3,              // Send digest with 3+ events
   },
 
   // Cooldown and escalation
@@ -32,11 +32,13 @@ export const AlertConfig = {
     absoluteSize: {
       weight: 25,
       thresholds: [
-        { min: 100000, score: 25 },   // $100K+
-        { min: 50000, score: 20 },    // $50K+
-        { min: 25000, score: 15 },    // $25K+
-        { min: 15000, score: 10 },    // $15K+
-        { min: 10000, score: 5 },     // $10K+ (whale threshold)
+        { min: 50000, score: 25 },    // $50K+
+        { min: 25000, score: 20 },    // $25K+
+        { min: 10000, score: 15 },    // $10K+
+        { min: 5000, score: 10 },     // $5K+
+        { min: 2000, score: 7 },      // $2K+
+        { min: 500, score: 5 },       // $500+
+        { min: 100, score: 3 },       // $100+
       ],
     },
 

@@ -28,6 +28,7 @@ export interface Trade {
   outcome: string;
   trader_address?: string;
   fee_rate_bps?: number;
+  title?: string; // Market title from Data API
 }
 
 export interface WhaleActivity {

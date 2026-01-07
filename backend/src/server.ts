@@ -125,25 +125,29 @@ export class ApiServer {
     });
 
     // Top 10 endpoints - pull from live API
+    // Note: We sample recent 500 trades for "top traders" - this is a snapshot, not full 24h data
     this.app.get('/api/top/traders', async (req: Request, res: Response) => {
       try {
         const trades = await this.client.getAllRecentTrades(500);
-        const traderVolumes = new Map<string, number>();
+        const traderVolumes = new Map<string, { volume: number; tradeCount: number }>();
         
         trades.forEach(trade => {
           if (trade.trader_address) {
-            const current = traderVolumes.get(trade.trader_address) || 0;
-            traderVolumes.set(trade.trader_address, current + (trade.size * trade.price));
+            const current = traderVolumes.get(trade.trader_address) || { volume: 0, tradeCount: 0 };
+            current.volume += trade.size * trade.price;
+            current.tradeCount += 1;
+            traderVolumes.set(trade.trader_address, current);
           }
         });
         
         const top = Array.from(traderVolumes.entries())
-          .map(([address, volume]) => ({ address, volume }))
+          .map(([address, data]) => ({ address, volume: data.volume, tradeCount: data.tradeCount }))
           .sort((a, b) => b.volume - a.volume)
           .slice(0, 10);
         
         res.json(top);
       } catch (error) {
+        console.error('Top traders error:', error);
         res.status(500).json({ error: 'Failed to fetch top traders' });
       }
     });
@@ -155,13 +159,14 @@ export class ApiServer {
           .map(m => ({
             market_id: m.id,
             question: m.question,
-            total_volume_24h: m.volume || 0,
+            total_volume_24h: parseFloat(String(m.volume)) || 0,
             trade_count_24h: 0, // Not available from API directly
           }))
           .sort((a, b) => b.total_volume_24h - a.total_volume_24h)
           .slice(0, 10);
         res.json(top);
       } catch (error) {
+        console.error('Top markets error:', error);
         res.status(500).json({ error: 'Failed to fetch top markets' });
       }
     });
@@ -171,13 +176,20 @@ export class ApiServer {
         const trades = await this.client.getAllRecentTrades(500);
         const top = trades
           .map(trade => ({
-            ...trade,
+            trader_address: trade.trader_address,
+            market_id: trade.market_id,
+            title: trade.title || 'Unknown Market',
+            size: trade.size,
+            price: trade.price,
+            side: trade.side,
+            timestamp: trade.timestamp,
             value: trade.size * trade.price
           }))
           .sort((a, b) => b.value - a.value)
           .slice(0, 10);
         res.json(top);
       } catch (error) {
+        console.error('Top trades error:', error);
         res.status(500).json({ error: 'Failed to fetch top trades' });
       }
     });
