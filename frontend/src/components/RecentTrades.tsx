@@ -22,6 +22,11 @@ export function RecentTrades({ trades }: Props) {
               <div key={trade.id} className="px-6 py-4 hover:bg-gray-750">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
+                    {trade.title && (
+                      <p className="text-sm text-gray-300 mb-2 line-clamp-1">
+                        {trade.title}
+                      </p>
+                    )}
                     <div className="flex items-center space-x-2">
                       <span
                         className={`px-2 py-1 text-xs font-semibold rounded ${

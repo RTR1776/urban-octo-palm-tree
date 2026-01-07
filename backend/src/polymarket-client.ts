@@ -59,7 +59,27 @@ export class PolymarketClient {
           closed: false,
         },
       });
-      return response.data;
+      
+      const markets = response.data || [];
+      
+      // Map API response to our Market type
+      return markets.map((m: any) => ({
+        id: m.id,
+        question: m.question,
+        description: m.description || '',
+        end_date: m.endDate || m.end_date,
+        volume: parseFloat(m.volume) || 0,
+        liquidity: parseFloat(m.liquidity) || 0,
+        active: m.active !== false,
+        closed: m.closed === true,
+        outcomes: typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) : (m.outcomes || []),
+        tokens: (m.tokens || []).map((t: any) => ({
+          token_id: t.token_id || t.tokenId,
+          outcome: t.outcome,
+          price: parseFloat(t.price) || 0,
+          winner: t.winner || false,
+        })),
+      }));
     } catch (error) {
       console.error('Error fetching markets:', error);
       return [];
@@ -69,7 +89,27 @@ export class PolymarketClient {
   async getMarket(marketId: string): Promise<Market | null> {
     try {
       const response = await this.gammaApi.get(`/markets/${marketId}`);
-      return response.data;
+      const m = response.data;
+      
+      if (!m) return null;
+      
+      return {
+        id: m.id,
+        question: m.question,
+        description: m.description || '',
+        end_date: m.endDate || m.end_date,
+        volume: parseFloat(m.volume) || 0,
+        liquidity: parseFloat(m.liquidity) || 0,
+        active: m.active !== false,
+        closed: m.closed === true,
+        outcomes: typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) : (m.outcomes || []),
+        tokens: (m.tokens || []).map((t: any) => ({
+          token_id: t.token_id || t.tokenId,
+          outcome: t.outcome,
+          price: parseFloat(t.price) || 0,
+          winner: t.winner || false,
+        })),
+      };
     } catch (error) {
       console.error(`Error fetching market ${marketId}:`, error);
       return null;
@@ -293,16 +333,36 @@ export class PolymarketClient {
       const tagKeywords = keywords[tag.toLowerCase()] || [];
       
       if (tagKeywords.length === 0) {
-        // No keywords for this tag, return all markets
-        return markets.slice(0, limit);
+        // No keywords for this tag, return all markets (mapped)
+        return this.getMarkets(limit, true);
       }
       
+      // Map raw markets to our Market type first
+      const mappedMarkets = markets.map((m: any) => ({
+        id: m.id,
+        question: m.question,
+        description: m.description || '',
+        end_date: m.endDate || m.end_date,
+        volume: parseFloat(m.volume) || 0,
+        liquidity: parseFloat(m.liquidity) || 0,
+        active: m.active !== false,
+        closed: m.closed === true,
+        outcomes: typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) : (m.outcomes || []),
+        tokens: (m.tokens || []).map((t: any) => ({
+          token_id: t.token_id || t.tokenId,
+          outcome: t.outcome,
+          price: parseFloat(t.price) || 0,
+          winner: t.winner || false,
+        })),
+      }));
+      
       // Filter markets that match any keyword
-      const filtered = markets.filter((market: Market) => {
+      const filtered = mappedMarkets.filter((market: Market) => {
         const question = market.question.toLowerCase();
         return tagKeywords.some(keyword => question.includes(keyword));
       });
       
+      console.log(`[getMarketsByTag] Tag: ${tag}, Found: ${filtered.length} markets`);
       return filtered.slice(0, limit);
     } catch (error) {
       console.error(`Error fetching markets for tag ${tag}:`, error);
