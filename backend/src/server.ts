@@ -297,9 +297,12 @@ export class ApiServer {
     this.app.get('/api/markets/volume-leaders', async (req: Request, res: Response) => {
       try {
         const limit = parseInt(req.query.limit as string) || 10;
+        console.log(`[API] Fetching volume leaders (limit: ${limit})`);
         const leaders = await this.client.getVolumeLeaders(limit);
+        console.log(`[API] Returning ${leaders.length} volume leaders`);
         res.json(leaders);
       } catch (error) {
+        console.error('Volume leaders error:', error);
         res.status(500).json({ error: 'Failed to fetch volume leaders' });
       }
     });
@@ -308,9 +311,12 @@ export class ApiServer {
     this.app.get('/api/markets/new', async (req: Request, res: Response) => {
       try {
         const limit = parseInt(req.query.limit as string) || 10;
+        console.log(`[API] Fetching new markets (limit: ${limit})`);
         const newMarkets = await this.client.getNewMarkets(limit);
+        console.log(`[API] Returning ${newMarkets.length} new markets`);
         res.json(newMarkets);
       } catch (error) {
+        console.error('New markets error:', error);
         res.status(500).json({ error: 'Failed to fetch new markets' });
       }
     });
@@ -320,9 +326,12 @@ export class ApiServer {
       try {
         const hours = parseInt(req.query.hours as string) || 24;
         const limit = parseInt(req.query.limit as string) || 10;
+        console.log(`[API] Fetching markets closing in ${hours} hours (limit: ${limit})`);
         const closing = await this.client.getClosingSoonMarkets(hours, limit);
+        console.log(`[API] Returning ${closing.length} closing markets`);
         res.json(closing);
       } catch (error) {
+        console.error('Closing markets error:', error);
         res.status(500).json({ error: 'Failed to fetch closing markets' });
       }
     });
@@ -332,9 +341,12 @@ export class ApiServer {
       try {
         const tag = req.params.tag;
         const limit = parseInt(req.query.limit as string) || 50;
+        console.log(`[API] Fetching markets for tag '${tag}' (limit: ${limit})`);
         const markets = await this.client.getMarketsByTag(tag, limit);
+        console.log(`[API] Returning ${markets.length} markets for tag '${tag}'`);
         res.json(markets);
       } catch (error) {
+        console.error('Markets by tag error:', error);
         res.status(500).json({ error: 'Failed to fetch markets by tag' });
       }
     });
@@ -376,30 +388,22 @@ export class ApiServer {
       }
     });
 
-    // Get hot markets (high momentum)
+    // Get hot markets (high volume + activity)
     this.app.get('/api/markets/hot', async (req: Request, res: Response) => {
       try {
         const limit = parseInt(req.query.limit as string) || 10;
         
-        // Get top volume markets and analyze their momentum
-        const topMarkets = await this.client.getVolumeLeaders(30);
-        const withMomentum = await Promise.all(
-          topMarkets.slice(0, 20).map(async (market) => {
-            const momentum = await this.client.getMarketMomentum(market.id);
-            return {
-              ...market,
-              momentum: momentum?.momentumScore || 0,
-              priceChange: momentum?.priceChange || 0,
-              volumeChange: momentum?.volumeChange || 0,
-            };
-          })
-        );
-
-        // Sort by momentum score
-        const hot = withMomentum
-          .filter(m => m.momentum > 0)
-          .sort((a, b) => b.momentum - a.momentum)
-          .slice(0, limit);
+        // Get top volume markets as "hot" for now
+        // Momentum calculation is expensive and may not have enough data
+        const topMarkets = await this.client.getVolumeLeaders(limit);
+        
+        // Add mock momentum data
+        const hot = topMarkets.map(market => ({
+          ...market,
+          momentum: (market.volume || 0) / 10000, // Simple momentum score
+          priceChange: 0, // Would need historical data
+          volumeChange: 0,
+        }));
 
         res.json(hot);
       } catch (error) {

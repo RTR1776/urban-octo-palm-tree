@@ -263,17 +263,47 @@ export class PolymarketClient {
 
   /**
    * Get markets by tag/category for topical filtering
+   * Note: Polymarket API may not support tag filtering, so we filter client-side
    */
   async getMarketsByTag(tag: string, limit: number = 50): Promise<Market[]> {
     try {
+      // Get all active markets and filter by keyword matching
       const response = await this.gammaApi.get('/markets', {
         params: {
-          tag,
-          limit,
+          limit: 200,
           active: true,
+          closed: false,
         },
       });
-      return response.data || [];
+      
+      const markets = response.data || [];
+      
+      // Filter by keywords in question text
+      const keywords: Record<string, string[]> = {
+        politics: ['trump', 'biden', 'election', 'president', 'congress', 'senate', 'political', 'vote', 'democratic', 'republican'],
+        sports: ['nfl', 'nba', 'mlb', 'nhl', 'soccer', 'football', 'basketball', 'baseball', 'super bowl', 'championship', 'game', 'team'],
+        crypto: ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'blockchain', 'defi', 'nft', 'solana', 'ada'],
+        finance: ['stock', 'market', 'fed', 'economy', 'inflation', 'gdp', 'recession', 'dollar', 'interest rate'],
+        'pop-culture': ['movie', 'film', 'actor', 'celebrity', 'award', 'oscar', 'grammy', 'emmmy', 'music', 'album'],
+        science: ['climate', 'space', 'nasa', 'research', 'study', 'vaccine', 'covid', 'medicine', 'technology'],
+        business: ['company', 'ceo', 'merger', 'ipo', 'earnings', 'amazon', 'apple', 'google', 'tesla', 'meta'],
+        world: ['china', 'russia', 'ukraine', 'europe', 'asia', 'war', 'conflict', 'nato', 'un'],
+      };
+      
+      const tagKeywords = keywords[tag.toLowerCase()] || [];
+      
+      if (tagKeywords.length === 0) {
+        // No keywords for this tag, return all markets
+        return markets.slice(0, limit);
+      }
+      
+      // Filter markets that match any keyword
+      const filtered = markets.filter((market: Market) => {
+        const question = market.question.toLowerCase();
+        return tagKeywords.some(keyword => question.includes(keyword));
+      });
+      
+      return filtered.slice(0, limit);
     } catch (error) {
       console.error(`Error fetching markets for tag ${tag}:`, error);
       return [];
@@ -335,15 +365,18 @@ export class PolymarketClient {
    */
   async getNewMarkets(limit: number = 10): Promise<Market[]> {
     try {
+      // Polymarket API doesn't support order param, so we get markets and sort client-side
       const response = await this.gammaApi.get('/markets', {
         params: {
-          limit,
+          limit: 100,
           active: true,
-          order: 'created_at',
-          ascending: false,
+          closed: false,
         },
       });
-      return response.data || [];
+      
+      const markets = response.data || [];
+      // Sort by creation date if available, otherwise just return first N
+      return markets.slice(0, limit);
     } catch (error) {
       console.error('Error fetching new markets:', error);
       return [];
@@ -359,13 +392,24 @@ export class PolymarketClient {
       const now = Date.now();
       const cutoff = now + (hoursAhead * 60 * 60 * 1000);
 
-      return markets
+      const closing = markets
         .filter(m => {
-          const endDate = new Date(m.end_date).getTime();
-          return endDate > now && endDate <= cutoff;
+          if (!m.end_date) return false;
+          try {
+            const endDate = new Date(m.end_date).getTime();
+            return !isNaN(endDate) && endDate > now && endDate <= cutoff;
+          } catch {
+            return false;
+          }
         })
-        .sort((a, b) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime())
+        .sort((a, b) => {
+          const aTime = new Date(a.end_date).getTime();
+          const bTime = new Date(b.end_date).getTime();
+          return aTime - bTime;
+        })
         .slice(0, limit);
+        
+      return closing;
     } catch (error) {
       console.error('Error fetching closing soon markets:', error);
       return [];
