@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 interface TopTrader {
   address: string;
@@ -39,9 +40,9 @@ export function TopTen() {
   const loadData = async () => {
     try {
       const [traders, markets, trades] = await Promise.all([
-        fetch('http://localhost:3001/api/top/traders').then(r => r.json()),
-        fetch('http://localhost:3001/api/top/markets').then(r => r.json()),
-        fetch('http://localhost:3001/api/top/trades').then(r => r.json()),
+        fetch(`${API_BASE}/top/traders`).then(r => r.json()),
+        fetch(`${API_BASE}/top/markets`).then(r => r.json()),
+        fetch(`${API_BASE}/top/trades`).then(r => r.json()),
       ]);
       setTopTraders(traders);
       setTopMarkets(markets);
