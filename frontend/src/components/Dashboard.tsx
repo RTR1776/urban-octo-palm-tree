@@ -39,16 +39,23 @@ export function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-xl font-bold text-white">Polymarket Monitor</h1>
-            <dibutton
+            <div className="flex items-center space-x-4">
+              <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
               >
                 {showSettings ? '📊 Dashboard' : '⚙️ Settings'}
               </button>
-              <v className="flex items-center space-x-4">
               <div className={`flex items-center ${connected ? 'text-green-400' : 'text-red-400'}`}>
                 <div className={`h-2 w-2 rounded-full mr-2 ${connected ? 'bg-green-400' : 'bg-red-400'}`}></div>
                 {connected ? 'Connected' : 'Disconnected'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {showSettings ? (
           <NotificationSettings />
         ) : (
