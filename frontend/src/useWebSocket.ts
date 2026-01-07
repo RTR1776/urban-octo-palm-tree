@@ -6,6 +6,19 @@ interface WebSocketMessage {
   data: any;
 }
 
+// Get WebSocket URL from API URL or fallback to current host
+const getWsUrl = () => {
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    // Convert https://xxx.fly.dev/api to wss://xxx.fly.dev/ws
+    const wsUrl = apiUrl.replace(/^http/, 'ws').replace(/\/api$/, '/ws');
+    return wsUrl;
+  }
+  // Fallback for local dev
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
+};
+
 export function useWebSocket() {
   const [connected, setConnected] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -14,8 +27,8 @@ export function useWebSocket() {
   const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = getWsUrl();
+    console.log('Connecting to WebSocket:', wsUrl);
 
     ws.current = new WebSocket(wsUrl);
 
