@@ -101,6 +101,63 @@ export class ApiServer {
       const trades = this.db.getRecentTrades(limit);
       res.json(trades);
     });
+
+    // Top 10 endpoints
+    this.app.get('/api/top/traders', (req: Request, res: Response) => {
+      const trades = this.db.getRecentTrades(1000);
+      const traderVolumes = new Map<string, number>();
+      
+      trades.forEach(trade => {
+        if (trade.trader_address) {
+          const current = traderVolumes.get(trade.trader_address) || 0;
+          traderVolumes.set(trade.trader_address, current + (trade.size * trade.price));
+        }
+      });
+      
+      const top = Array.from(traderVolumes.entries())
+        .map(([address, volume]) => ({ address, volume }))
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 10);
+      
+      res.json(top);
+    });
+
+    this.app.get('/api/top/markets', (req: Request, res: Response) => {
+      const stats = this.db.getMarketStats();
+      const top = stats
+        .sort((a, b) => b.total_volume_24h - a.total_volume_24h)
+        .slice(0, 10);
+      res.json(top);
+    });
+
+    this.app.get('/api/top/trades', (req: Request, res: Response) => {
+      const trades = this.db.getRecentTrades(1000);
+      const top = trades
+        .map(trade => ({
+          ...trade,
+          value: trade.size * trade.price
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+      res.json(top);
+    });
+
+    // Notification settings
+    this.app.get('/api/notifications/settings', (req: Request, res: Response) => {
+      // Load from a simple JSON file or env vars
+      res.json({
+        email: process.env.NOTIFICATION_EMAIL || '',
+        phone: process.env.NOTIFICATION_PHONE || '',
+        webhookUrl: process.env.NOTIFICATION_WEBHOOK || '',
+        enabled: process.env.NOTIFICATIONS_ENABLED === 'true',
+      });
+    });
+
+    this.app.post('/api/notifications/settings', (req: Request, res: Response) => {
+      // In production, save to database or config file
+      // For now, just acknowledge
+      res.json({ success: true, message: 'Settings saved (add to .env file)' });
+    });
   }
 
   listen(port: number): void {

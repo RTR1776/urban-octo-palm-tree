@@ -1,18 +1,21 @@
 import { PolymarketClient } from './polymarket-client';
 import { DatabaseService } from './database';
 import { Trade, WhaleActivity, Alert, MarketStats } from './types';
+import { NotificationService } from './notification-service';
 
 export class MonitorService {
   private client: PolymarketClient;
   private db: DatabaseService;
+  private notifications: NotificationService;
   private whaleThreshold: number;
   private largeMovementThreshold: number;
   private unusualVolumeMultiplier: number;
   private knownWhales: Set<string>;
 
-  constructor(client: PolymarketClient, db: DatabaseService) {
+  constructor(client: PolymarketClient, db: DatabaseService, notifications: NotificationService) {
     this.client = client;
     this.db = db;
+    this.notifications = notifications;
     this.whaleThreshold = parseFloat(process.env.WHALE_THRESHOLD || '10000');
     this.largeMovementThreshold = parseFloat(process.env.LARGE_MOVEMENT_THRESHOLD || '5000');
     this.unusualVolumeMultiplier = parseFloat(process.env.UNUSUAL_VOLUME_MULTIPLIER || '3');
@@ -207,6 +210,11 @@ export class MonitorService {
   private createAlert(alert: Alert): void {
     this.db.createAlert(alert);
     console.log(`[${alert.severity}] ${alert.type}: ${alert.message}`);
+    
+    // Send notification for high severity alerts
+    this.notifications.sendAlert(alert).catch(err => 
+      console.error('Failed to send notification:', err)
+    );
   }
 
   private formatAddress(address: string): string {

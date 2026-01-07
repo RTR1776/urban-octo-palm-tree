@@ -5,9 +5,11 @@ import { PolymarketClient } from './polymarket-client';
 import { DatabaseService } from './database';
 import { MonitorService } from './monitor';
 import { ApiServer } from './server';
+import { NotificationService } from './notification-service';
 
-// Load environment variables from backend/.env
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// Load environment variables - works for both dev (tsx) and production (compiled)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config(); // Also try current directory
 
 const PORT = parseInt(process.env.PORT || '3001');
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL_SECONDS || '60');
@@ -18,7 +20,8 @@ async function main() {
 
   const client = new PolymarketClient();
   const db = new DatabaseService(DB_PATH);
-  const monitor = new MonitorService(client, db);
+  const notifications = new NotificationService();
+  const monitor = new MonitorService(client, db, notifications);
   const server = new ApiServer(db, client);
 
   server.listen(PORT);

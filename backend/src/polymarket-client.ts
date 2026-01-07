@@ -15,11 +15,8 @@ export class PolymarketClient {
       timeout: 10000,
     });
 
-    // Initialize CLOB client with wallet private key if available
-    const privateKey = process.env.WALLET_PRIVATE_KEY;
-    if (privateKey) {
-      this.initPromise = this.initializeClobClient(privateKey);
-    }
+    // Using public Data API for trade data - no authentication needed!
+    console.log('🐋 Whale tracking enabled via public Data API');
 
     this.dataApi = axios.create({
       baseURL: process.env.DATA_API_URL || 'https://data-api.polymarket.com',
@@ -81,15 +78,34 @@ export class PolymarketClient {
 
   async getTrades(marketId: string, limit: number = 100): Promise<Trade[]> {
     try {
-      await this.ensureInitialized();
+      // Use public Data API endpoint - no authentication required!
+      const response = await this.dataApi.get('/trades', {
+        params: {
+          limit: limit || 100,
+        },
+      });
       
-      if (!this.clobClient) {
-        console.error('CLOB client not initialized. Set WALLET_PRIVATE_KEY in .env');
-        return [];
+      // Filter trades for this specific market if marketId provided
+      const allTrades = response.data || [];
+      
+      // Map the data API format to our Trade type
+      const mappedTrades = allTrades.map((trade: any) => ({
+        id: trade.transactionHash,
+        market_id: trade.conditionId,
+        trader_address: trade.proxyWallet,
+        side: trade.side,
+        size: trade.size,
+        price: trade.price,
+        timestamp: trade.timestamp,
+        outcome: trade.outcome,
+      }));
+      
+      // Filter by market if specified
+      if (marketId) {
+        return mappedTrades.filter((t: Trade) => t.market_id === marketId);
       }
       
-      const trades = await this.clobClient.getTrades({ market: marketId });
-      return trades.slice(0, limit) as Trade[];
+      return mappedTrades;
     } catch (error) {
       console.error(`Error fetching trades for market ${marketId}:`, error);
       return [];
