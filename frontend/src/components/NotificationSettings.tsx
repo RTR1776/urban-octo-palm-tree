@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 interface NotificationSettings {
   email: string;
   phone: string;
@@ -22,7 +24,7 @@ export function NotificationSettings() {
 
   const loadSettings = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/notifications/settings');
+      const response = await fetch(`${API_BASE}/notifications/settings`);
       const data = await response.json();
       setSettings(data);
     } catch (error) {
@@ -32,7 +34,7 @@ export function NotificationSettings() {
 
   const handleSave = async () => {
     try {
-      await fetch('http://localhost:3001/api/notifications/settings', {
+      await fetch(`${API_BASE}/notifications/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
