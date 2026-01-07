@@ -23,24 +23,13 @@ export class ApiServer {
   }
 
   private setupMiddleware(): void {
-    // CORS configuration for production
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:5173',
-    ];
-    
+    // CORS configuration - allow all origins for API access
+    // The API is read-only public data, no need to restrict
     this.app.use(cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, etc)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
+      origin: true,  // Allow all origins
       credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
     }));
     this.app.use(express.json());
   }
