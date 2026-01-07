@@ -26,18 +26,23 @@ export function MarketDiscovery() {
   const loadData = async () => {
     try {
       const [hot, fresh, closing, volume] = await Promise.all([
-        fetch(`${API_BASE}/markets/hot?limit=10`).then(r => r.json()),
-        fetch(`${API_BASE}/markets/new?limit=10`).then(r => r.json()),
-        fetch(`${API_BASE}/markets/closing-soon?hours=24&limit=10`).then(r => r.json()),
-        fetch(`${API_BASE}/markets/volume-leaders?limit=10`).then(r => r.json()),
+        fetch(`${API_BASE}/markets/hot?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/markets/new?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/markets/closing-soon?hours=24&limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/markets/volume-leaders?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
       
-      setHotMarkets(hot);
-      setNewMarkets(fresh);
-      setClosingMarkets(closing);
-      setVolumeLeaders(volume);
+      setHotMarkets(hot || []);
+      setNewMarkets(fresh || []);
+      setClosingMarkets(closing || []);
+      setVolumeLeaders(volume || []);
     } catch (error) {
       console.error('Error loading market discovery data:', error);
+      // Set empty arrays on error
+      setHotMarkets([]);
+      setNewMarkets([]);
+      setClosingMarkets([]);
+      setVolumeLeaders([]);
     } finally {
       setLoading(false);
     }

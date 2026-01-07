@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Component, ErrorInfo, ReactNode } from 'react';
 import { useWebSocket } from '../useWebSocket';
 import { api } from '../api';
 import { AlertList } from './AlertList';
@@ -10,6 +10,29 @@ import { MarketDiscovery } from './MarketDiscovery';
 import { CategoryFilter } from './CategoryFilter';
 import { NotificationSettings } from './NotificationSettings';
 import { MarketStats, Alert } from '../types';
+
+// Error boundary to prevent new features from crashing the app
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Component error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null; // Gracefully hide the component
+    }
+    return this.props.children;
+  }
+}
 
 // Helper to derive stats from alerts when market stats aren't available
 function deriveStatsFromAlerts(alerts: Alert[]): MarketStats[] {
@@ -129,12 +152,17 @@ export function Dashboard() {
               <TopTen />
             </div>
 
+            {/* New features - gracefully degrade if APIs not available */}
             <div className="mb-8">
-              <MarketDiscovery />
+              <ErrorBoundary>
+                <MarketDiscovery />
+              </ErrorBoundary>
             </div>
 
             <div className="mb-8">
-              <CategoryFilter />
+              <ErrorBoundary>
+                <CategoryFilter />
+              </ErrorBoundary>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -32,8 +32,15 @@ export function CategoryFilter() {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE}/markets/by-tag/${selectedCategory}?limit=50`);
+      
+      if (!response.ok) {
+        console.warn('Category API not available yet');
+        setMarkets([]);
+        return;
+      }
+      
       const data = await response.json();
-      setMarkets(data);
+      setMarkets(Array.isArray(data) ? data : []);
       
       // Auto-select first market for charts
       if (data.length > 0 && !selectedMarket) {

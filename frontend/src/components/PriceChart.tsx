@@ -40,9 +40,16 @@ export function PriceChart({ marketId, marketQuestion, interval = '1h', height =
         `${API_BASE}/markets/${marketId}/price-history?interval=${interval}&startTs=${startTs}&endTs=${endTs}`
       );
       
-      if (!response.ok) throw new Error('Failed to fetch');
+      if (!response.ok) {
+        console.warn('Price history API not available');
+        throw new Error('Failed to fetch');
+      }
       
       const priceData: PricePoint[] = await response.json();
+      
+      if (!Array.isArray(priceData)) {
+        throw new Error('Invalid data format');
+      }
       
       // Transform for chart
       const chartData = priceData.map(point => ({
