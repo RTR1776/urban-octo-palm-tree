@@ -438,10 +438,35 @@ export class PolymarketClient {
           closed: false,
         },
       });
-      
+
       const markets = response.data || [];
-      // Sort by creation date if available, otherwise just return first N
-      return markets.slice(0, limit);
+
+      // Map API response to our Market type (same mapping as getMarkets)
+      const mappedMarkets = markets.map((m: any) => ({
+        id: m.id,
+        question: m.question,
+        description: m.description || '',
+        end_date: m.endDate || m.end_date,
+        volume: parseFloat(m.volume) || 0,
+        liquidity: parseFloat(m.liquidity) || 0,
+        active: m.active !== false,
+        closed: m.closed === true,
+        outcomes: typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) : (m.outcomes || []),
+        tokens: (m.tokens || []).map((t: any) => ({
+          token_id: t.token_id || t.tokenId,
+          outcome: t.outcome,
+          price: parseFloat(t.price) || 0,
+          winner: t.winner || false,
+        })),
+      }));
+
+      // Sort by end_date ascending (markets ending soonest are often newer/more relevant)
+      // Since we don't have createdAt, we use liquidity as a proxy - lower liquidity = newer market
+      const sorted = mappedMarkets.sort((a: Market, b: Market) => {
+        return (a.liquidity || 0) - (b.liquidity || 0);
+      });
+
+      return sorted.slice(0, limit);
     } catch (error) {
       console.error('Error fetching new markets:', error);
       return [];
