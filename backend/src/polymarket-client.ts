@@ -79,13 +79,13 @@ export class PolymarketClient {
   async getTrades(marketId: string, limit: number = 100): Promise<Trade[]> {
     try {
       // Use public Data API endpoint - no authentication required!
+      // Get recent trades globally (market filtering doesn't work well with conditionId)
       const response = await this.dataApi.get('/trades', {
         params: {
           limit: limit || 100,
         },
       });
       
-      // Filter trades for this specific market if marketId provided
       const allTrades = response.data || [];
       
       // Map the data API format to our Trade type
@@ -98,16 +98,38 @@ export class PolymarketClient {
         price: trade.price,
         timestamp: trade.timestamp,
         outcome: trade.outcome,
+        title: trade.title, // Market title from API
       }));
-      
-      // Filter by market if specified
-      if (marketId) {
-        return mappedTrades.filter((t: Trade) => t.market_id === marketId);
-      }
       
       return mappedTrades;
     } catch (error) {
-      console.error(`Error fetching trades for market ${marketId}:`, error);
+      console.error(`Error fetching trades:`, error);
+      return [];
+    }
+  }
+
+  // Get all recent trades globally for whale monitoring
+  async getAllRecentTrades(limit: number = 500): Promise<Trade[]> {
+    try {
+      const response = await this.dataApi.get('/trades', {
+        params: { limit },
+      });
+      
+      const allTrades = response.data || [];
+      
+      return allTrades.map((trade: any) => ({
+        id: trade.transactionHash,
+        market_id: trade.conditionId,
+        trader_address: trade.proxyWallet,
+        side: trade.side,
+        size: trade.size,
+        price: trade.price,
+        timestamp: trade.timestamp,
+        outcome: trade.outcome,
+        title: trade.title,
+      }));
+    } catch (error) {
+      console.error('Error fetching all trades:', error);
       return [];
     }
   }

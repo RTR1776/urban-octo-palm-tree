@@ -33,13 +33,24 @@ export class MonitorService {
     console.log('Starting market monitoring cycle...');
 
     try {
+      // Get all recent trades globally - this is more efficient
+      const trades = await this.client.getAllRecentTrades(500);
+      console.log(`Processing ${trades.length} recent trades...`);
+      
+      // Process all trades for whale activity
+      const recentTrades = trades.filter(t =>
+        Date.now() / 1000 - t.timestamp < 3600 // Last hour
+      );
+      
+      for (const trade of recentTrades) {
+        const question = (trade as any).title || 'Unknown Market';
+        this.analyzeTradeForWhaleActivity(trade, question);
+        this.analyzeTradeForLargeMovement(trade, question);
+      }
+
+      // Also get markets for stats
       const markets = await this.client.getMarkets(100, true);
       console.log(`Monitoring ${markets.length} active markets`);
-
-      for (const market of markets) {
-        await this.monitorMarket(market.id, market.question);
-        await this.sleep(500);
-      }
 
       await this.calculateMarketStats();
     } catch (error) {
