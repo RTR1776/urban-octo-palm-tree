@@ -7,23 +7,23 @@ export const AlertConfig = {
   // Severity tiers and routing
   tiers: {
     critical: { min: 80, max: 100, action: 'ping' },        // @everyone or role ping
-    high: { min: 50, max: 79, action: 'message' },          // Message, no ping
-    medium: { min: 20, max: 49, action: 'digest' },         // Batch into digest
-    low: { min: 0, max: 19, action: 'store' },              // Store only, no notification
+    high: { min: 60, max: 79, action: 'message' },          // Message, no ping
+    medium: { min: 40, max: 59, action: 'digest' },         // Batch into digest
+    low: { min: 0, max: 39, action: 'store' },              // Store only, no notification
   },
 
   // Digest bucket settings
   digest: {
-    intervalMs: 10 * 60 * 1000,      // 10 minutes
-    maxEventsPerDigest: 25,
-    minEventsToSend: 3,              // Don't send digest with < 3 events
+    intervalMs: 15 * 60 * 1000,      // 15 minutes
+    maxEventsPerDigest: 15,
+    minEventsToSend: 5,              // Don't send digest with < 5 events
   },
 
   // Cooldown and escalation
   cooldown: {
-    windowMs: 10 * 60 * 1000,        // 10 minutes
-    escalationThreshold: 15,          // Score must increase by 15+ to break cooldown
-    maxAlertsPerWindow: 5,            // Hard cap per (market, wallet) pair
+    windowMs: 15 * 60 * 1000,        // 15 minutes
+    escalationThreshold: 20,          // Score must increase by 20+ to break cooldown
+    maxAlertsPerWindow: 3,            // Hard cap per (market, wallet) pair
   },
 
   // Scoring weights (should sum to ~100 for max possible score)
@@ -32,11 +32,11 @@ export const AlertConfig = {
     absoluteSize: {
       weight: 25,
       thresholds: [
-        { min: 100000, score: 25 },
-        { min: 50000, score: 20 },
-        { min: 25000, score: 15 },
-        { min: 10000, score: 10 },
-        { min: 5000, score: 5 },
+        { min: 100000, score: 25 },   // $100K+
+        { min: 50000, score: 20 },    // $50K+
+        { min: 25000, score: 15 },    // $25K+
+        { min: 15000, score: 10 },    // $15K+
+        { min: 10000, score: 5 },     // $10K+ (whale threshold)
       ],
     },
 
