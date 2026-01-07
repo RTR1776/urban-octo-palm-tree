@@ -3,15 +3,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Install ALL dependencies (including dev for TypeScript build)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install
 
-# Copy source
-COPY . .
+# Copy source files needed for build
+COPY tsconfig.json ./
+COPY src ./src
 
 # Build TypeScript
 RUN npm run build
+
+# Remove dev dependencies after build
+RUN npm prune --production
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
