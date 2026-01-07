@@ -6,6 +6,7 @@
 import { PolymarketClient } from './polymarket-client';
 import { DatabaseService } from './database';
 import { NotificationService } from './notification-service';
+import { WebSocketServer } from './websocket-server';
 import { Trade } from './types';
 
 // New components
@@ -30,6 +31,7 @@ export class EnhancedMonitorService {
   private client: PolymarketClient;
   private db: DatabaseService;
   private notifications: NotificationService;
+  private wsServer?: WebSocketServer;
   
   // State and tracking
   private store: MemoryStateStore;
@@ -51,11 +53,13 @@ export class EnhancedMonitorService {
   constructor(
     client: PolymarketClient,
     db: DatabaseService,
-    notifications: NotificationService
+    notifications: NotificationService,
+    wsServer?: WebSocketServer
   ) {
     this.client = client;
     this.db = db;
     this.notifications = notifications;
+    this.wsServer = wsServer;
 
     // Initialize components
     this.store = getStateStore();
@@ -97,6 +101,16 @@ export class EnhancedMonitorService {
 
       // Filter to trades we haven't processed yet
       const newTrades = trades.filter(t => !this.processedTradeIds.has(t.id));
+      
+      // Save all new trades to database in batch for efficiency
+      if (newTrades.length > 0) {
+        try {
+          this.db.saveTrades(newTrades);
+          console.log(`Saved ${newTrades.length} new trades to database`);
+        } catch (error) {
+          console.error('Error saving trades batch:', error);
+        }
+      }
       
       // Track processed IDs (keep last 2000)
       for (const trade of newTrades) {
@@ -141,11 +155,16 @@ export class EnhancedMonitorService {
    * Process a single trade through the full pipeline
    */
   private async processTrade(trade: Trade): Promise<void> {
-    const marketQuestion = (trade as any).title || 'Unknown Market';
-    const tradeValue = trade.size * trade.price;
+    const marketQuestion = (trade as any).title || 'Unknown Market';\n    const tradeValue = trade.size * trade.price;
 
     // Skip tiny trades
     if (tradeValue < 100) return;
+
+    // Broadcast trade via WebSocket for real-time updates
+    // (Trade is already saved in batch by monitorMarkets)
+    if (this.wsServer) {
+      this.wsServer.broadcastTrade(trade);
+    }
 
     // 1. Update market metrics
     const metrics = await this.metricsTracker.recordTrade(trade, marketQuestion);
@@ -221,6 +240,33 @@ export class EnhancedMonitorService {
     // 11. Update whale tracking if significant
     if (breakdown.total >= 50 && trade.trader_address) {
       await this.store.addKnownWhale(trade.trader_address);
+      
+      // Update whale activity in database
+      this.db.updateWhaleActivity({
+        trader_address: trade.trader_address,
+        market_id: trade.market_id,
+        market_question: marketQuestion,
+        total_volume: tradeValue,
+        trade_count: 1,
+        first_seen: walletContext.firstSeen,
+        last_activity: trade.timestamp,
+        is_new_whale: walletContext.isNew || breakdown.total >= 70,
+      });
+      
+      // Broadcast whale activity update via WebSocket
+      if (this.wsServer) {
+        const whaleActivity = {
+          trader_address: trade.trader_address,
+          market_id: trade.market_id,
+          market_question: marketQuestion,
+          total_volume: walletContext.recentVolume,
+          trade_count: walletContext.recentTradeCount,
+          first_seen: walletContext.firstSeen,
+          last_activity: trade.timestamp,
+          is_new_whale: walletContext.isNew || breakdown.total >= 70,
+        };
+        this.wsServer.broadcastWhaleActivity(whaleActivity);
+      }
     }
   }
 

@@ -24,20 +24,23 @@ async function main() {
   const db = new DatabaseService(DB_PATH);
   const notifications = new NotificationService();
   
+  // Start API server first to get WebSocket server
+  const server = new ApiServer(db, client);
+  server.listen(PORT);
+  
+  // Get WebSocket server for real-time broadcasts
+  const wsServer = server.getWebSocketServer();
+  
   // Use enhanced monitor by default (set USE_ENHANCED_MONITOR=false to use legacy)
   let monitor: MonitorService | EnhancedMonitorService;
   
   if (USE_ENHANCED_MONITOR) {
-    console.log('📊 Using ENHANCED monitor with severity scoring');
-    monitor = new EnhancedMonitorService(client, db, notifications);
+    console.log('📊 Using ENHANCED monitor with severity scoring + WebSocket broadcasts');
+    monitor = new EnhancedMonitorService(client, db, notifications, wsServer);
   } else {
     console.log('📊 Using LEGACY monitor');
     monitor = new MonitorService(client, db, notifications);
   }
-  
-  const server = new ApiServer(db, client);
-
-  server.listen(PORT);
 
   console.log(`Monitoring will run every ${CHECK_INTERVAL} seconds`);
 

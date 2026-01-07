@@ -66,12 +66,6 @@ export class ApiServer {
       res.json({ success: true });
     });
 
-    this.app.get('/api/whales', (req: Request, res: Response) => {
-      const limit = parseInt(req.query.limit as string) || 100;
-      const whales = this.db.getWhaleActivity(limit);
-      res.json(whales);
-    });
-
     this.app.get('/api/whales/:address', (req: Request, res: Response) => {
       const address = req.params.address;
       const activity = this.db.getTraderActivity(address);
@@ -284,6 +278,134 @@ export class ApiServer {
       // In production, save to database or config file
       // For now, just acknowledge
       res.json({ success: true, message: 'Settings saved (add to .env file)' });
+    });
+
+    // ========== Enhanced Market Discovery Endpoints ==========
+
+    // Get trending events (event-level groupings)
+    this.app.get('/api/events', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 20;
+        const events = await this.client.getEvents(limit);
+        res.json(events);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch events' });
+      }
+    });
+
+    // Get volume leader markets
+    this.app.get('/api/markets/volume-leaders', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const leaders = await this.client.getVolumeLeaders(limit);
+        res.json(leaders);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch volume leaders' });
+      }
+    });
+
+    // Get newly created markets
+    this.app.get('/api/markets/new', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const newMarkets = await this.client.getNewMarkets(limit);
+        res.json(newMarkets);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch new markets' });
+      }
+    });
+
+    // Get markets closing soon
+    this.app.get('/api/markets/closing-soon', async (req: Request, res: Response) => {
+      try {
+        const hours = parseInt(req.query.hours as string) || 24;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const closing = await this.client.getClosingSoonMarkets(hours, limit);
+        res.json(closing);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch closing markets' });
+      }
+    });
+
+    // Get markets by category/tag
+    this.app.get('/api/markets/by-tag/:tag', async (req: Request, res: Response) => {
+      try {
+        const tag = req.params.tag;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const markets = await this.client.getMarketsByTag(tag, limit);
+        res.json(markets);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch markets by tag' });
+      }
+    });
+
+    // Get price history/candlestick data
+    this.app.get('/api/markets/:id/price-history', async (req: Request, res: Response) => {
+      try {
+        const marketId = req.params.id;
+        const interval = (req.query.interval as any) || '1h';
+        const startTs = req.query.startTs ? parseInt(req.query.startTs as string) : undefined;
+        const endTs = req.query.endTs ? parseInt(req.query.endTs as string) : undefined;
+        
+        const history = await this.client.getPriceHistory(marketId, interval, startTs, endTs);
+        res.json(history);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch price history' });
+      }
+    });
+
+    // Get market momentum analysis
+    this.app.get('/api/markets/:id/momentum', async (req: Request, res: Response) => {
+      try {
+        const marketId = req.params.id;
+        const momentum = await this.client.getMarketMomentum(marketId);
+        res.json(momentum || { volumeChange: 0, priceChange: 0, momentumScore: 0 });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to analyze momentum' });
+      }
+    });
+
+    // Get orderbook depth for liquidity analysis
+    this.app.get('/api/markets/:id/orderbook-depth', async (req: Request, res: Response) => {
+      try {
+        const tokenId = req.params.id;
+        const depth = await this.client.getOrderBookDepth(tokenId);
+        res.json(depth);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch orderbook depth' });
+      }
+    });
+
+    // Get hot markets (high momentum)
+    this.app.get('/api/markets/hot', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        
+        // Get top volume markets and analyze their momentum
+        const topMarkets = await this.client.getVolumeLeaders(30);
+        const withMomentum = await Promise.all(
+          topMarkets.slice(0, 20).map(async (market) => {
+            const momentum = await this.client.getMarketMomentum(market.id);
+            return {
+              ...market,
+              momentum: momentum?.momentumScore || 0,
+              priceChange: momentum?.priceChange || 0,
+              volumeChange: momentum?.volumeChange || 0,
+            };
+          })
+        );
+
+        // Sort by momentum score
+        const hot = withMomentum
+          .filter(m => m.momentum > 0)
+          .sort((a, b) => b.momentum - a.momentum)
+          .slice(0, limit);
+
+        res.json(hot);
+      } catch (error) {
+        console.error('Hot markets error:', error);
+        res.status(500).json({ error: 'Failed to fetch hot markets' });
+      }
     });
   }
 

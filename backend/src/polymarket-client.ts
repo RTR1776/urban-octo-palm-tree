@@ -183,4 +183,230 @@ export class PolymarketClient {
       return 0;
     }
   }
+
+  // ========== Additional API Features ==========
+
+  /**
+   * Get trending/featured events (groups of related markets)
+   */
+  async getEvents(limit: number = 20, archived: boolean = false): Promise<any[]> {
+    try {
+      const response = await this.gammaApi.get('/events', {
+        params: { limit, archived },
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get price history for a specific market/token
+   * Returns OHLCV (candlestick) data
+   */
+  async getPriceHistory(
+    conditionId: string,
+    interval: '1m' | '5m' | '1h' | '1d' = '1h',
+    startTs?: number,
+    endTs?: number
+  ): Promise<any[]> {
+    try {
+      const params: any = {
+        market: conditionId,
+        interval,
+      };
+      if (startTs) params.startTs = startTs;
+      if (endTs) params.endTs = endTs;
+
+      const response = await this.dataApi.get('/prices', { params });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching price history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get current orderbook depth (bids/asks) for better liquidity analysis
+   */
+  async getOrderBookDepth(tokenId: string): Promise<{
+    bids: Array<{ price: number; size: number }>;
+    asks: Array<{ price: number; size: number }>;
+    spread: number;
+    midPrice: number;
+  } | null> {
+    try {
+      const book = await this.getOrderBook(tokenId);
+      if (!book) return null;
+
+      const bids = (book.bids || []).map((b: any) => ({
+        price: parseFloat(b.price),
+        size: parseFloat(b.size),
+      }));
+      const asks = (book.asks || []).map((a: any) => ({
+        price: parseFloat(a.price),
+        size: parseFloat(a.size),
+      }));
+
+      const bestBid = bids[0]?.price || 0;
+      const bestAsk = asks[0]?.price || 1;
+      const spread = bestAsk - bestBid;
+      const midPrice = (bestBid + bestAsk) / 2;
+
+      return { bids, asks, spread, midPrice };
+    } catch (error) {
+      console.error('Error analyzing orderbook depth:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get markets by tag/category for topical filtering
+   */
+  async getMarketsByTag(tag: string, limit: number = 50): Promise<Market[]> {
+    try {
+      const response = await this.gammaApi.get('/markets', {
+        params: {
+          tag,
+          limit,
+          active: true,
+        },
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error(`Error fetching markets for tag ${tag}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get simplified market snapshots with key metrics
+   * Perfect for dashboard widgets
+   */
+  async getMarketSnapshots(marketIds: string[]): Promise<Array<{
+    id: string;
+    question: string;
+    volume: number;
+    liquidity: number;
+    probability: number;
+    change24h: number;
+    tradesCount: number;
+  }>> {
+    try {
+      const markets = await Promise.all(
+        marketIds.slice(0, 20).map(id => this.getMarket(id))
+      );
+
+      return markets
+        .filter(m => m !== null)
+        .map(m => ({
+          id: m!.id,
+          question: m!.question,
+          volume: m!.volume || 0,
+          liquidity: m!.liquidity || 0,
+          probability: m!.tokens?.[0]?.price || 0.5,
+          change24h: 0, // Would need price history to calculate
+          tradesCount: 0, // Would need to aggregate from trades API
+        }));
+    } catch (error) {
+      console.error('Error fetching market snapshots:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get volume leaders (markets sorted by 24h volume)
+   */
+  async getVolumeLeaders(limit: number = 10): Promise<Market[]> {
+    try {
+      const markets = await this.getMarkets(100, true);
+      return markets
+        .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+        .slice(0, limit);
+    } catch (error) {
+      console.error('Error fetching volume leaders:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get recently created markets (newest first)
+   */
+  async getNewMarkets(limit: number = 10): Promise<Market[]> {
+    try {
+      const response = await this.gammaApi.get('/markets', {
+        params: {
+          limit,
+          active: true,
+          order: 'created_at',
+          ascending: false,
+        },
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching new markets:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get markets closing soon (for urgency/FOMO features)
+   */
+  async getClosingSoonMarkets(hoursAhead: number = 24, limit: number = 10): Promise<Market[]> {
+    try {
+      const markets = await this.getMarkets(200, true);
+      const now = Date.now();
+      const cutoff = now + (hoursAhead * 60 * 60 * 1000);
+
+      return markets
+        .filter(m => {
+          const endDate = new Date(m.end_date).getTime();
+          return endDate > now && endDate <= cutoff;
+        })
+        .sort((a, b) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime())
+        .slice(0, limit);
+    } catch (error) {
+      console.error('Error fetching closing soon markets:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Analyze market momentum (price movement + volume)
+   * Useful for "hot markets" detection
+   */
+  async getMarketMomentum(conditionId: string): Promise<{
+    volumeChange: number;
+    priceChange: number;
+    momentumScore: number;
+  } | null> {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const oneDayAgo = now - 86400;
+
+      // Get recent price history
+      const prices = await this.getPriceHistory(conditionId, '1h', oneDayAgo, now);
+      
+      if (prices.length < 2) return null;
+
+      const oldestPrice = prices[0]?.c || 0.5;
+      const latestPrice = prices[prices.length - 1]?.c || 0.5;
+      const priceChange = ((latestPrice - oldestPrice) / oldestPrice) * 100;
+
+      // Volume change (first half vs second half of period)
+      const midpoint = Math.floor(prices.length / 2);
+      const firstHalfVol = prices.slice(0, midpoint).reduce((sum: number, p: any) => sum + (p.v || 0), 0);
+      const secondHalfVol = prices.slice(midpoint).reduce((sum: number, p: any) => sum + (p.v || 0), 0);
+      const volumeChange = firstHalfVol > 0 ? ((secondHalfVol - firstHalfVol) / firstHalfVol) * 100 : 0;
+
+      // Momentum score (weighted combination)
+      const momentumScore = Math.abs(priceChange) * 2 + volumeChange;
+
+      return { volumeChange, priceChange, momentumScore };
+    } catch (error) {
+      console.error('Error analyzing market momentum:', error);
+      return null;
+    }
+  }
 }

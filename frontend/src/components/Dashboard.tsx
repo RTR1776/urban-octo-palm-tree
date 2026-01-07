@@ -6,8 +6,55 @@ import { WhaleList } from './WhaleList';
 import { MarketList } from './MarketList';
 import { RecentTrades } from './RecentTrades';
 import { TopTen } from './TopTen';
+import { MarketDiscovery } from './MarketDiscovery';
+import { CategoryFilter } from './CategoryFilter';
 import { NotificationSettings } from './NotificationSettings';
-import { MarketStats } from '../types';
+import { MarketStats, Alert } from '../types';
+
+// Helper to derive stats from alerts when market stats aren't available
+function deriveStatsFromAlerts(alerts: Alert[]): MarketStats[] {
+  const marketMap = new Map<string, {
+    question: string;
+    volume: number;
+    count: number;
+  }>();
+
+  // Aggregate alert data by market
+  alerts.forEach(alert => {
+    if (!alert.market_id) return;
+    
+    const existing = marketMap.get(alert.market_id);
+    const volume = alert.amount || 0;
+    
+    if (existing) {
+      existing.volume += volume;
+      existing.count += 1;
+    } else {
+      // Extract market question from message if available
+      const question = alert.message.split(':')[0] || 'Unknown Market';
+      marketMap.set(alert.market_id, {
+        question,
+        volume,
+        count: 1,
+      });
+    }
+  });
+
+  // Convert to MarketStats format
+  return Array.from(marketMap.entries())
+    .map(([market_id, data]) => ({
+      market_id,
+      question: data.question,
+      total_volume_24h: data.volume,
+      trade_count_24h: data.count,
+      unique_traders_24h: 0,
+      avg_trade_size_24h: data.count > 0 ? data.volume / data.count : 0,
+      price_change_24h: 0,
+      largest_trade_24h: 0,
+    }))
+    .sort((a, b) => b.total_volume_24h - a.total_volume_24h)
+    .slice(0, 10);
+}
 
 export function Dashboard() {
   const { connected, alerts, whales, trades } = useWebSocket();
@@ -29,6 +76,9 @@ export function Dashboard() {
       setLoading(false);
     }
   };
+
+  // Derive stats from alerts if stats are empty
+  const derivedStats = stats.length > 0 ? stats : deriveStatsFromAlerts(alerts);
 
   const unreadCount = alerts.filter((a) => !a.read).length;
   const newWhales = whales.filter((w) => w.is_new_whale).length;
@@ -79,6 +129,14 @@ export function Dashboard() {
               <TopTen />
             </div>
 
+            <div className="mb-8">
+              <MarketDiscovery />
+            </div>
+mb-8">
+              <CategoryFilter />
+            </div>
+
+            <div className="
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div>
                 <AlertList alerts={alerts} />
@@ -93,7 +151,7 @@ export function Dashboard() {
                 <RecentTrades trades={trades} />
               </div>
               <div>
-                <MarketList stats={stats} loading={loading} />
+                <MarketList stats={derivedStats} loading={loading} />
               </div>
             </div>
           </>
