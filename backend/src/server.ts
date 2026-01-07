@@ -299,10 +299,11 @@ export class ApiServer {
         const limit = parseInt(req.query.limit as string) || 10;
         console.log(`[API] Fetching volume leaders (limit: ${limit})`);
         const leaders = await this.client.getVolumeLeaders(limit);
-        console.log(`[API] Returning ${leaders.length} volume leaders`);
+        console.log(`[API] Got leaders:`, leaders);
+        console.log(`[API] Returning ${leaders ? leaders.length : 'null'} volume leaders`);
         res.json(leaders);
-      } catch (error) {
-        console.error('Volume leaders error:', error);
+      } catch (error: any) {
+        console.error('Volume leaders error:', error?.message || error);
         res.status(500).json({ error: 'Failed to fetch volume leaders' });
       }
     });
