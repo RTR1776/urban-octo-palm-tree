@@ -294,7 +294,10 @@ export class ApiServer {
     });
 
     // Get volume leader markets
+    // Volume leaders
+    console.log('[SETUP] Registering /api/markets/volume-leaders endpoint');
     this.app.get('/api/markets/volume-leaders', async (req: Request, res: Response) => {
+      console.log('[ENDPOINT HIT] /api/markets/volume-leaders');
       try {
         const limit = parseInt(req.query.limit as string) || 10;
         console.log(`[API] Fetching volume leaders (limit: ${limit})`);
