@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import { PolymarketClient } from './polymarket-client';
 import { DatabaseService } from './database';
 import { MonitorService } from './monitor';
+import { EnhancedMonitorService } from './enhanced-monitor';
 import { ApiServer } from './server';
 import { NotificationService } from './notification-service';
 
@@ -14,6 +15,7 @@ dotenv.config(); // Also try current directory
 const PORT = parseInt(process.env.PORT || '3001');
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL_SECONDS || '60');
 const DB_PATH = process.env.DB_PATH || './data/polymarket.db';
+const USE_ENHANCED_MONITOR = process.env.USE_ENHANCED_MONITOR !== 'false'; // Default to enhanced
 
 async function main() {
   console.log('Starting Polymarket Monitor...');
@@ -21,7 +23,18 @@ async function main() {
   const client = new PolymarketClient();
   const db = new DatabaseService(DB_PATH);
   const notifications = new NotificationService();
-  const monitor = new MonitorService(client, db, notifications);
+  
+  // Use enhanced monitor by default (set USE_ENHANCED_MONITOR=false to use legacy)
+  let monitor: MonitorService | EnhancedMonitorService;
+  
+  if (USE_ENHANCED_MONITOR) {
+    console.log('📊 Using ENHANCED monitor with severity scoring');
+    monitor = new EnhancedMonitorService(client, db, notifications);
+  } else {
+    console.log('📊 Using LEGACY monitor');
+    monitor = new MonitorService(client, db, notifications);
+  }
+  
   const server = new ApiServer(db, client);
 
   server.listen(PORT);
@@ -42,12 +55,18 @@ async function main() {
 
   process.on('SIGINT', () => {
     console.log('Shutting down...');
+    if ('destroy' in monitor) {
+      (monitor as EnhancedMonitorService).destroy();
+    }
     db.close();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
     console.log('Shutting down...');
+    if ('destroy' in monitor) {
+      (monitor as EnhancedMonitorService).destroy();
+    }
     db.close();
     process.exit(0);
   });

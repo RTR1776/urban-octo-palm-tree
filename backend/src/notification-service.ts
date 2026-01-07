@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { Alert } from './types';
 
+interface TieredAlertPayload {
+  content?: string;
+  embeds?: object[];
+}
+
 export class NotificationService {
   private email?: string;
   private phone?: string;
@@ -8,7 +13,7 @@ export class NotificationService {
   private enabled: boolean;
   
   // Rate limiting for Discord webhooks
-  private webhookQueue: Alert[] = [];
+  private webhookQueue: (Alert | TieredAlertPayload)[] = [];
   private isProcessingQueue = false;
   private lastWebhookTime = 0;
   private readonly WEBHOOK_COOLDOWN = 2000; // 2 seconds between messages
@@ -25,6 +30,21 @@ export class NotificationService {
       if (this.email) console.log(`  - Email: ${this.email}`);
       if (this.phone) console.log(`  - SMS: ${this.phone}`);
       if (this.webhookUrl) console.log(`  - Webhook configured (rate-limited)`);
+    }
+  }
+
+  /**
+   * Send tiered alert (used by new AlertRouter)
+   */
+  async sendTieredAlert(payload: TieredAlertPayload): Promise<void> {
+    if (!this.enabled || !this.webhookUrl) return;
+
+    // Add to queue
+    this.webhookQueue.push(payload);
+
+    // Start processing if not already
+    if (!this.isProcessingQueue) {
+      this.processWebhookQueue();
     }
   }
 
@@ -132,7 +152,7 @@ export class NotificationService {
     this.isProcessingQueue = true;
 
     while (this.webhookQueue.length > 0) {
-      const alert = this.webhookQueue.shift()!;
+      const item = this.webhookQueue.shift()!;
       
       // Rate limit: wait if we sent too recently
       const timeSinceLastSend = Date.now() - this.lastWebhookTime;
@@ -141,19 +161,31 @@ export class NotificationService {
       }
 
       try {
-        await axios.post(this.webhookUrl!, {
-          content: this.formatAlert(alert),
-          embeds: [{
-            title: `🐋 ${alert.type} Alert`,
-            description: alert.message,
-            color: alert.severity === 'HIGH' ? 0xFF0000 : 0xFFA500,
-            fields: [
-              { name: '💰 Amount', value: `$${alert.amount?.toFixed(2) || 'N/A'}`, inline: true },
-              { name: '📊 Market', value: alert.market_id?.substring(0, 10) + '...', inline: true },
-            ],
-            timestamp: new Date(alert.timestamp).toISOString(),
-          }],
-        });
+        // Check if it's a TieredAlertPayload or Alert
+        let payload: object;
+        
+        if ('content' in item || 'embeds' in item) {
+          // TieredAlertPayload - send directly
+          payload = item;
+        } else {
+          // Legacy Alert format
+          const alert = item as Alert;
+          payload = {
+            content: this.formatAlert(alert),
+            embeds: [{
+              title: `🐋 ${alert.type} Alert`,
+              description: alert.message,
+              color: alert.severity === 'HIGH' ? 0xFF0000 : 0xFFA500,
+              fields: [
+                { name: '💰 Amount', value: `$${alert.amount?.toFixed(2) || 'N/A'}`, inline: true },
+                { name: '📊 Market', value: alert.market_id?.substring(0, 10) + '...', inline: true },
+              ],
+              timestamp: new Date(alert.timestamp).toISOString(),
+            }],
+          };
+        }
+
+        await axios.post(this.webhookUrl!, payload);
         this.lastWebhookTime = Date.now();
         console.log('✅ Webhook notification sent');
       } catch (error: any) {
@@ -162,8 +194,8 @@ export class NotificationService {
           const retryAfter = error.response.headers['retry-after'] || 5;
           console.log(`⏳ Rate limited, waiting ${retryAfter}s...`);
           await this.sleep(parseInt(retryAfter) * 1000);
-          // Put alert back in queue
-          this.webhookQueue.unshift(alert);
+          // Put item back in queue
+          this.webhookQueue.unshift(item);
         } else {
           console.error('Error sending webhook:', error?.message || error);
         }
