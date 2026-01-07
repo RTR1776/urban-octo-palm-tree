@@ -3,6 +3,7 @@ import cors from 'cors';
 import { Server } from 'http';
 import { DatabaseService } from './database';
 import { PolymarketClient } from './polymarket-client';
+import { KalshiClient } from './kalshi-client';
 import { WebSocketServer } from './websocket-server';
 
 export class ApiServer {
@@ -10,14 +11,19 @@ export class ApiServer {
   private server: Server;
   private db: DatabaseService;
   private client: PolymarketClient;
+  private kalshiClient?: KalshiClient;
   private wsServer: WebSocketServer;
 
-  constructor(db: DatabaseService, client: PolymarketClient) {
+  constructor(db: DatabaseService, client: PolymarketClient, kalshiClient?: KalshiClient) {
     this.app = express();
     this.db = db;
     this.client = client;
+    this.kalshiClient = kalshiClient;
     this.setupMiddleware();
     this.setupRoutes();
+    if (this.kalshiClient) {
+      this.setupKalshiRoutes();
+    }
     this.server = this.app.listen(0);
     this.wsServer = new WebSocketServer(this.server, db);
   }
@@ -580,6 +586,121 @@ export class ApiServer {
       } catch (error) {
         console.error('Hot markets error:', error);
         res.status(500).json({ error: 'Failed to fetch hot markets' });
+      }
+    });
+  }
+
+  /**
+   * Setup Kalshi-specific API routes
+   */
+  private setupKalshiRoutes(): void {
+    if (!this.kalshiClient) return;
+
+    console.log('[SETUP] Registering Kalshi API endpoints');
+
+    // Kalshi markets
+    this.app.get('/api/kalshi/markets', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const markets = await this.kalshiClient!.getMarkets(limit);
+        res.json(markets);
+      } catch (error) {
+        console.error('Kalshi markets error:', error);
+        res.status(500).json({ error: 'Failed to fetch Kalshi markets' });
+      }
+    });
+
+    // Kalshi single market
+    this.app.get('/api/kalshi/markets/:ticker', async (req: Request, res: Response) => {
+      try {
+        const market = await this.kalshiClient!.getMarket(req.params.ticker);
+        res.json(market);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi market' });
+      }
+    });
+
+    // Kalshi trades for a market
+    this.app.get('/api/kalshi/markets/:ticker/trades', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 100;
+        const trades = await this.kalshiClient!.getTrades(req.params.ticker, limit);
+        res.json(trades);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi trades' });
+      }
+    });
+
+    // Kalshi recent trades (aggregated)
+    this.app.get('/api/kalshi/trades/recent', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 100;
+        const trades = await this.kalshiClient!.getAllRecentTrades(limit);
+        res.json(trades);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi trades' });
+      }
+    });
+
+    // Kalshi volume leaders
+    this.app.get('/api/kalshi/markets/volume-leaders', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const leaders = await this.kalshiClient!.getVolumeLeaders(limit);
+        res.json(leaders);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi volume leaders' });
+      }
+    });
+
+    // Kalshi closing soon
+    this.app.get('/api/kalshi/markets/closing-soon', async (req: Request, res: Response) => {
+      try {
+        const hours = parseInt(req.query.hours as string) || 24;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const closing = await this.kalshiClient!.getClosingSoonMarkets(hours, limit);
+        res.json(closing);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi closing markets' });
+      }
+    });
+
+    // Kalshi events
+    this.app.get('/api/kalshi/events', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 20;
+        const events = await this.kalshiClient!.getEvents(limit);
+        res.json(events);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi events' });
+      }
+    });
+
+    // Kalshi orderbook
+    this.app.get('/api/kalshi/markets/:ticker/orderbook', async (req: Request, res: Response) => {
+      try {
+        const orderbook = await this.kalshiClient!.getOrderbook(req.params.ticker);
+        res.json(orderbook);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch Kalshi orderbook' });
+      }
+    });
+
+    // Combined stats endpoint showing Kalshi status
+    this.app.get('/api/kalshi/status', async (req: Request, res: Response) => {
+      try {
+        const markets = await this.kalshiClient!.getMarkets(5);
+        res.json({
+          enabled: true,
+          authenticated: this.kalshiClient!.isAuthenticated(),
+          sampleMarkets: markets.length,
+        });
+      } catch (error) {
+        res.json({
+          enabled: true,
+          authenticated: false,
+          error: 'Failed to connect to Kalshi API',
+        });
       }
     });
   }

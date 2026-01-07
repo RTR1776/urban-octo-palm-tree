@@ -15,17 +15,20 @@ export class AlertRouter {
   private cooldowns: CooldownManager;
   private db: DatabaseService;
   private digestTimer: NodeJS.Timeout | null = null;
+  private source: string; // 'POLYMARKET' | 'KALSHI'
 
   constructor(
     store: StateStore,
     notifications: NotificationService,
     cooldowns: CooldownManager,
-    db: DatabaseService
+    db: DatabaseService,
+    source: string = 'POLYMARKET'
   ) {
     this.store = store;
     this.notifications = notifications;
     this.cooldowns = cooldowns;
     this.db = db;
+    this.source = source;
 
     // Start digest timer
     this.startDigestTimer();
@@ -88,13 +91,14 @@ export class AlertRouter {
    */
   private async sendCriticalAlert(event: ScoredEvent, escalated?: boolean): Promise<void> {
     const prefix = escalated ? '⬆️ ESCALATED ' : '';
+    const sourceTag = this.source !== 'POLYMARKET' ? `[${this.source}] ` : '';
     const sideEmoji = event.trade?.side === 'BUY' ? '🟢' : '🔴';
     const sideText = event.trade ? `${sideEmoji} ${event.trade.side}` : '';
     const valueText = event.trade ? `$${event.trade.valueUsd.toFixed(0)}` : '';
     const breakdown = this.formatScoreBreakdownCompact(event.scoreBreakdown);
-    
+
     const content = [
-      `@everyone ${prefix}🚨 **CRITICAL ALERT** - ${this.getEventEmoji(event.type)} **${event.type}**`,
+      `@everyone ${prefix}${sourceTag}🚨 **CRITICAL ALERT** - ${this.getEventEmoji(event.type)} **${event.type}**`,
       `**Score: ${event.score}** ${sideText} ${valueText}`,
       `📊 ${breakdown}`,
       `> ${event.shortMessage}`,
@@ -105,7 +109,7 @@ export class AlertRouter {
       embeds: [this.buildEmbed(event, 0xFF0000)], // Red
     });
 
-    console.log(`[CRITICAL] ${event.type} score ${event.score}: ${event.shortMessage}`);
+    console.log(`[CRITICAL] [${this.source}] ${event.type} score ${event.score}: ${event.shortMessage}`);
   }
 
   /**
@@ -113,13 +117,14 @@ export class AlertRouter {
    */
   private async sendHighAlert(event: ScoredEvent, escalated?: boolean): Promise<void> {
     const prefix = escalated ? '⬆️ ' : '';
+    const sourceTag = this.source !== 'POLYMARKET' ? `[${this.source}] ` : '';
     const sideEmoji = event.trade?.side === 'BUY' ? '🟢' : '🔴';
     const sideText = event.trade ? `${sideEmoji} ${event.trade.side}` : '';
     const valueText = event.trade ? `$${event.trade.valueUsd.toFixed(0)}` : '';
     const breakdown = this.formatScoreBreakdownCompact(event.scoreBreakdown);
-    
+
     const content = [
-      `${prefix}${this.getEventEmoji(event.type)} **${event.type}** (Score: ${event.score})`,
+      `${prefix}${sourceTag}${this.getEventEmoji(event.type)} **${event.type}** (Score: ${event.score})`,
       `${sideText} ${valueText}`,
       `📊 ${breakdown}`,
       `> ${event.shortMessage}`,
@@ -130,7 +135,7 @@ export class AlertRouter {
       embeds: [this.buildEmbed(event, 0xFFA500)], // Orange
     });
 
-    console.log(`[HIGH] ${event.type} score ${event.score}: ${event.shortMessage}`);
+    console.log(`[HIGH] [${this.source}] ${event.type} score ${event.score}: ${event.shortMessage}`);
   }
 
   /**

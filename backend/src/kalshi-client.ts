@@ -1,12 +1,12 @@
 /**
  * Kalshi API Client
- * https://kalshi.com/docs/api
- * 
+ * https://trading-api.readme.io/reference/getting-started
+ *
  * Kalshi has a public API similar to Polymarket.
  * Key differences:
- * - Uses API key authentication (not wallet-based)
+ * - Uses API key authentication (email/password -> token)
  * - Different data structure for markets/trades
- * - REST API only (no WebSocket for public data)
+ * - REST API with rate limits
  */
 
 import axios, { AxiosInstance } from 'axios';
@@ -14,14 +14,19 @@ import axios, { AxiosInstance } from 'axios';
 // Kalshi API types
 export interface KalshiMarket {
   ticker: string;
+  event_ticker: string;
   title: string;
+  subtitle?: string;
   status: string;
   close_time: string;
+  expiration_time: string;
   yes_bid: number;
   yes_ask: number;
   no_bid: number;
   no_ask: number;
+  last_price: number;
   volume: number;
+  volume_24h: number;
   open_interest: number;
   category: string;
   result?: string;
@@ -31,7 +36,8 @@ export interface KalshiTrade {
   trade_id: string;
   ticker: string;
   side: 'yes' | 'no';
-  price: number;
+  yes_price: number;
+  no_price: number;
   count: number;
   created_time: string;
   taker_side: 'yes' | 'no';
@@ -39,80 +45,132 @@ export interface KalshiTrade {
 
 export interface KalshiOrderbook {
   ticker: string;
-  yes: { price: number; quantity: number }[];
-  no: { price: number; quantity: number }[];
+  yes: Array<[number, number]>; // [price, quantity]
+  no: Array<[number, number]>;
 }
 
-// Normalized types (same as Polymarket for easy integration)
+export interface KalshiEvent {
+  event_ticker: string;
+  title: string;
+  category: string;
+  markets: KalshiMarket[];
+}
+
+// Normalized types (compatible with Polymarket for easy integration)
 export interface NormalizedMarket {
   id: string;
   question: string;
+  description: string;
+  end_date: string;
   active: boolean;
   volume: number;
+  volume_24h: number;
   outcomes: string[];
   outcomePrices: number[];
+  source: 'kalshi';
 }
 
 export interface NormalizedTrade {
   id: string;
   market_id: string;
-  trader_address?: string;
-  side: string;
+  trader_address?: string; // Kalshi doesn't expose this
+  side: 'BUY' | 'SELL';
   size: number;
   price: number;
   timestamp: number;
   outcome: string;
   title?: string;
+  source: 'kalshi';
 }
 
 export class KalshiClient {
   private api: AxiosInstance;
   private authenticated: boolean = false;
+  private token: string | null = null;
+  private tokenExpiry: number = 0;
 
   constructor() {
-    // Kalshi public API base
+    // Kalshi API base URL
+    const baseURL = process.env.KALSHI_API_URL || 'https://trading-api.kalshi.com/trade-api/v2';
+
     this.api = axios.create({
-      baseURL: 'https://api.elections.kalshi.com/trade-api/v2',
+      baseURL,
+      timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
+
+    // Add response interceptor for rate limit handling
+    this.api.interceptors.response.use(
+      response => response,
+      async error => {
+        if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'] || 5;
+          console.log(`[Kalshi] Rate limited, waiting ${retryAfter}s...`);
+          await this.sleep(parseInt(retryAfter) * 1000);
+          return this.api.request(error.config);
+        }
+        throw error;
+      }
+    );
 
     console.log('📊 Kalshi client initialized');
   }
 
   /**
-   * Authenticate with API key (optional, for private endpoints)
+   * Authenticate with email/password to get access token
    */
-  async authenticate(email: string, password: string): Promise<void> {
+  async authenticate(): Promise<boolean> {
+    const email = process.env.KALSHI_EMAIL;
+    const password = process.env.KALSHI_PASSWORD;
+
+    if (!email || !password) {
+      console.log('[Kalshi] No credentials provided, using public endpoints only');
+      return false;
+    }
+
     try {
       const response = await this.api.post('/login', { email, password });
-      const token = response.data.token;
-      
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      this.token = response.data.token;
+      this.tokenExpiry = Date.now() + (23 * 60 * 60 * 1000); // 23 hours
+
+      this.api.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
       this.authenticated = true;
-      console.log('🔐 Kalshi authenticated');
-    } catch (error) {
-      console.error('Kalshi auth failed:', error);
-      throw error;
+      console.log('🔐 Kalshi authenticated successfully');
+      return true;
+    } catch (error: any) {
+      console.error('[Kalshi] Auth failed:', error?.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Ensure we have a valid token
+   */
+  private async ensureAuthenticated(): Promise<void> {
+    if (!this.authenticated || Date.now() > this.tokenExpiry) {
+      await this.authenticate();
     }
   }
 
   /**
    * Get active markets
    */
-  async getMarkets(limit: number = 100, activeOnly: boolean = true): Promise<NormalizedMarket[]> {
+  async getMarkets(limit: number = 100, status: string = 'open'): Promise<NormalizedMarket[]> {
     try {
       const response = await this.api.get('/markets', {
         params: {
           limit,
-          status: activeOnly ? 'open' : undefined,
+          status,
         },
       });
 
-      return response.data.markets.map((m: KalshiMarket) => this.normalizeMarket(m));
-    } catch (error) {
-      console.error('Error fetching Kalshi markets:', error);
+      const markets = response.data.markets || [];
+      return markets.map((m: KalshiMarket) => this.normalizeMarket(m));
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching markets:', error?.response?.data || error.message);
       return [];
     }
   }
@@ -124,14 +182,29 @@ export class KalshiClient {
     try {
       const response = await this.api.get(`/markets/${ticker}`);
       return this.normalizeMarket(response.data.market);
-    } catch (error) {
-      console.error(`Error fetching Kalshi market ${ticker}:`, error);
+    } catch (error: any) {
+      console.error(`[Kalshi] Error fetching market ${ticker}:`, error?.response?.data || error.message);
       return null;
     }
   }
 
   /**
-   * Get trades for a market
+   * Get events (groups of related markets)
+   */
+  async getEvents(limit: number = 50, status: string = 'open'): Promise<KalshiEvent[]> {
+    try {
+      const response = await this.api.get('/events', {
+        params: { limit, status },
+      });
+      return response.data.events || [];
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching events:', error?.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get trades for a specific market
    */
   async getTrades(ticker: string, limit: number = 100): Promise<NormalizedTrade[]> {
     try {
@@ -139,51 +212,99 @@ export class KalshiClient {
         params: { limit },
       });
 
+      const trades = response.data.trades || [];
       const market = await this.getMarket(ticker);
 
-      return response.data.trades.map((t: KalshiTrade) => 
+      return trades.map((t: KalshiTrade) =>
         this.normalizeTrade(t, market?.question || ticker)
       );
-    } catch (error) {
-      console.error(`Error fetching Kalshi trades for ${ticker}:`, error);
+    } catch (error: any) {
+      console.error(`[Kalshi] Error fetching trades for ${ticker}:`, error?.response?.data || error.message);
       return [];
     }
   }
 
   /**
-   * Get all recent trades across all markets
+   * Get all recent trades across top markets
+   * Kalshi doesn't have a global trades endpoint, so we aggregate from active markets
    */
   async getAllRecentTrades(limit: number = 500): Promise<NormalizedTrade[]> {
     try {
-      // Kalshi doesn't have a global trades endpoint, so we aggregate from top markets
-      const markets = await this.getMarkets(20, true);
-      const allTrades: NormalizedTrade[] = [];
+      // Get top markets by volume
+      const markets = await this.getMarkets(30, 'open');
+      const sortedMarkets = markets.sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0));
 
-      for (const market of markets.slice(0, 10)) {
-        const trades = await this.getTrades(market.id, Math.floor(limit / 10));
-        allTrades.push(...trades);
-        await this.sleep(100); // Rate limiting
+      const allTrades: NormalizedTrade[] = [];
+      const tradesPerMarket = Math.ceil(limit / 15);
+
+      // Fetch trades from top 15 markets in parallel (with batching)
+      const marketBatches = this.chunk(sortedMarkets.slice(0, 15), 5);
+
+      for (const batch of marketBatches) {
+        const batchResults = await Promise.all(
+          batch.map(market => this.getTrades(market.id, tradesPerMarket))
+        );
+        batchResults.forEach(trades => allTrades.push(...trades));
+        await this.sleep(200); // Rate limit between batches
       }
 
       return allTrades
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, limit);
-    } catch (error) {
-      console.error('Error fetching all Kalshi trades:', error);
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching all trades:', error?.response?.data || error.message);
       return [];
     }
   }
 
   /**
-   * Get orderbook for price depth
+   * Get orderbook for a market
    */
   async getOrderbook(ticker: string): Promise<KalshiOrderbook | null> {
     try {
       const response = await this.api.get(`/markets/${ticker}/orderbook`);
       return response.data.orderbook;
-    } catch (error) {
-      console.error(`Error fetching Kalshi orderbook for ${ticker}:`, error);
+    } catch (error: any) {
+      console.error(`[Kalshi] Error fetching orderbook for ${ticker}:`, error?.response?.data || error.message);
       return null;
+    }
+  }
+
+  /**
+   * Get volume leaders
+   */
+  async getVolumeLeaders(limit: number = 10): Promise<NormalizedMarket[]> {
+    try {
+      const markets = await this.getMarkets(100, 'open');
+      return markets
+        .sort((a, b) => (b.volume_24h || b.volume || 0) - (a.volume_24h || a.volume || 0))
+        .slice(0, limit);
+    } catch (error) {
+      console.error('[Kalshi] Error getting volume leaders:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get markets closing soon
+   */
+  async getClosingSoonMarkets(hoursAhead: number = 24, limit: number = 10): Promise<NormalizedMarket[]> {
+    try {
+      const markets = await this.getMarkets(200, 'open');
+      const now = Date.now();
+      const cutoff = now + (hoursAhead * 60 * 60 * 1000);
+
+      return markets
+        .filter(m => {
+          if (!m.end_date) return false;
+          const endDate = new Date(m.end_date).getTime();
+          return !isNaN(endDate) && endDate > now && endDate <= cutoff;
+        })
+        .sort((a, b) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime())
+        .slice(0, limit);
+    } catch (error) {
+      console.error('[Kalshi] Error getting closing markets:', error);
+      return [];
     }
   }
 
@@ -193,11 +314,18 @@ export class KalshiClient {
   private normalizeMarket(market: KalshiMarket): NormalizedMarket {
     return {
       id: market.ticker,
-      question: market.title,
+      question: market.title + (market.subtitle ? ` - ${market.subtitle}` : ''),
+      description: '',
+      end_date: market.expiration_time || market.close_time,
       active: market.status === 'open',
-      volume: market.volume,
+      volume: market.volume || 0,
+      volume_24h: market.volume_24h || 0,
       outcomes: ['Yes', 'No'],
-      outcomePrices: [market.yes_bid / 100, market.no_bid / 100], // Kalshi uses cents
+      outcomePrices: [
+        (market.yes_bid || market.last_price || 50) / 100,
+        (market.no_bid || (100 - (market.last_price || 50))) / 100
+      ],
+      source: 'kalshi',
     };
   }
 
@@ -205,19 +333,33 @@ export class KalshiClient {
    * Normalize Kalshi trade to standard format
    */
   private normalizeTrade(trade: KalshiTrade, title: string): NormalizedTrade {
+    const isBuy = trade.taker_side === 'yes';
     return {
       id: trade.trade_id,
       market_id: trade.ticker,
-      side: trade.taker_side === 'yes' ? 'BUY' : 'SELL',
+      side: isBuy ? 'BUY' : 'SELL',
       size: trade.count,
-      price: trade.price / 100, // Kalshi uses cents
+      price: (trade.yes_price || 50) / 100, // Kalshi uses cents
       timestamp: new Date(trade.created_time).getTime() / 1000,
       outcome: trade.side === 'yes' ? 'Yes' : 'No',
       title,
+      source: 'kalshi',
     };
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private chunk<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  isAuthenticated(): boolean {
+    return this.authenticated;
   }
 }
