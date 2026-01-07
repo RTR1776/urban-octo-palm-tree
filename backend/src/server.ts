@@ -101,12 +101,6 @@ export class ApiServer {
       }
     });
 
-    this.app.get('/api/stats', (req: Request, res: Response) => {
-      const marketId = req.query.marketId as string;
-      const stats = this.db.getMarketStats(marketId);
-      res.json(stats);
-    });
-
     this.app.get('/api/trades/recent', async (req: Request, res: Response) => {
       try {
         const limit = parseInt(req.query.limit as string) || 100;
