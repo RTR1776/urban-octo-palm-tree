@@ -1,11 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import cron from 'node-cron';
 import { PolymarketClient } from './polymarket-client';
 import { DatabaseService } from './database';
 import { MonitorService } from './monitor';
 import { ApiServer } from './server';
 
-dotenv.config();
+// Load environment variables from backend/.env
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const PORT = parseInt(process.env.PORT || '3001');
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL_SECONDS || '60');
