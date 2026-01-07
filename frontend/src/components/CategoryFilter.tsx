@@ -23,6 +23,7 @@ export function CategoryFilter() {
   const [loading, setLoading] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'chart' | 'liquidity'>('list');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadCategoryMarkets();
@@ -31,23 +32,30 @@ export function CategoryFilter() {
   const loadCategoryMarkets = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch(`${API_BASE}/markets/by-tag/${selectedCategory}?limit=50`);
       
       if (!response.ok) {
-        console.warn('Category API not available yet');
+        setError(`Backend API returned ${response.status}. API: ${API_BASE}`);
         setMarkets([]);
         return;
       }
       
       const data = await response.json();
-      setMarkets(Array.isArray(data) ? data : []);
+      const marketArray = Array.isArray(data) ? data : [];
+      setMarkets(marketArray);
+      
+      if (marketArray.length === 0) {
+        setError(`No ${selectedCategory} markets found. Backend may need deployment.`);
+      }
       
       // Auto-select first market for charts
-      if (data.length > 0 && !selectedMarket) {
-        setSelectedMarket(data[0]);
+      if (marketArray.length > 0 && !selectedMarket) {
+        setSelectedMarket(marketArray[0]);
       }
     } catch (error) {
       console.error('Error loading category markets:', error);
+      setError(`Connection failed. Check VITE_API_URL: ${API_BASE}`);
       setMarkets([]);
     } finally {
       setLoading(false);
@@ -125,6 +133,11 @@ export function CategoryFilter() {
       {loading ? (
         <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center text-gray-400">
           Loading markets...
+        </div>
+      ) : error ? (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
+          <div className="text-yellow-400 mb-2">⚠️ {error}</div>
+          <div className="text-xs text-gray-500 mt-2">Make sure your backend is deployed and VITE_API_URL is set</div>
         </div>
       ) : markets.length === 0 ? (
         <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center text-gray-400">

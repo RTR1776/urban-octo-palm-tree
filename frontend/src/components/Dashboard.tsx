@@ -8,6 +8,7 @@ import { RecentTrades } from './RecentTrades';
 import { TopTen } from './TopTen';
 import { MarketDiscovery } from './MarketDiscovery';
 import { CategoryFilter } from './CategoryFilter';
+import { ApiStatus } from './ApiStatus';
 import { NotificationSettings } from './NotificationSettings';
 import { MarketStats, Alert } from '../types';
 
@@ -133,6 +134,8 @@ export function Dashboard() {
           <NotificationSettings />
         ) : (
           <>
+            <ApiStatus />
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
                 <h3 className="text-sm font-medium text-gray-400">Unread Alerts</h3>

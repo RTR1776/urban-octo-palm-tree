@@ -16,6 +16,7 @@ export function MarketDiscovery() {
   const [closingMarkets, setClosingMarkets] = useState<Market[]>([]);
   const [volumeLeaders, setVolumeLeaders] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -25,19 +26,38 @@ export function MarketDiscovery() {
 
   const loadData = async () => {
     try {
+      setError(null);
       const [hot, fresh, closing, volume] = await Promise.all([
-        fetch(`${API_BASE}/markets/hot?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE}/markets/new?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE}/markets/closing-soon?hours=24&limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE}/markets/volume-leaders?limit=10`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/markets/hot?limit=10`).then(r => {
+          if (!r.ok) throw new Error(`Hot markets: ${r.status}`);
+          return r.json();
+        }).catch((e) => { console.error(e); return []; }),
+        fetch(`${API_BASE}/markets/new?limit=10`).then(r => {
+          if (!r.ok) throw new Error(`New markets: ${r.status}`);
+          return r.json();
+        }).catch((e) => { console.error(e); return []; }),
+        fetch(`${API_BASE}/markets/closing-soon?hours=24&limit=10`).then(r => {
+          if (!r.ok) throw new Error(`Closing markets: ${r.status}`);
+          return r.json();
+        }).catch((e) => { console.error(e); return []; }),
+        fetch(`${API_BASE}/markets/volume-leaders?limit=10`).then(r => {
+          if (!r.ok) throw new Error(`Volume leaders: ${r.status}`);
+          return r.json();
+        }).catch((e) => { console.error(e); return []; }),
       ]);
       
       setHotMarkets(hot || []);
       setNewMarkets(fresh || []);
       setClosingMarkets(closing || []);
       setVolumeLeaders(volume || []);
+      
+      // If all arrays are empty, might be a connection issue
+      if (!hot?.length && !fresh?.length && !closing?.length && !volume?.length) {
+        setError(`Backend API may not be configured. Using: ${API_BASE}`);
+      }
     } catch (error) {
       console.error('Error loading market discovery data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load markets');
       // Set empty arrays on error
       setHotMarkets([]);
       setNewMarkets([]);
@@ -168,6 +188,11 @@ export function MarketDiscovery() {
       <div className="p-6">
         {loading ? (
           <div className="text-center text-gray-400 py-8">Loading markets...</div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <div className="text-yellow-400 mb-2">⚠️ {error}</div>
+            <div className="text-xs text-gray-500">Check that VITE_API_URL is set correctly in Vercel</div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeTab === 'hot' && hotMarkets.map(m => renderMarketCard(m, 'momentum'))}

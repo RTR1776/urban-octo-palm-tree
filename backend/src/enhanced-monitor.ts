@@ -155,7 +155,8 @@ export class EnhancedMonitorService {
    * Process a single trade through the full pipeline
    */
   private async processTrade(trade: Trade): Promise<void> {
-    const marketQuestion = (trade as any).title || 'Unknown Market';\n    const tradeValue = trade.size * trade.price;
+    const marketQuestion = (trade as any).title || 'Unknown Market';
+    const tradeValue = trade.size * trade.price;
 
     // Skip tiny trades
     if (tradeValue < 100) return;
@@ -248,7 +249,7 @@ export class EnhancedMonitorService {
         market_question: marketQuestion,
         total_volume: tradeValue,
         trade_count: 1,
-        first_seen: walletContext.firstSeen,
+        first_seen: walletContext.firstSeen || Date.now(),
         last_activity: trade.timestamp,
         is_new_whale: walletContext.isNew || breakdown.total >= 70,
       });
@@ -261,7 +262,7 @@ export class EnhancedMonitorService {
           market_question: marketQuestion,
           total_volume: walletContext.recentVolume,
           trade_count: walletContext.recentTradeCount,
-          first_seen: walletContext.firstSeen,
+          first_seen: walletContext.firstSeen || Date.now(),
           last_activity: trade.timestamp,
           is_new_whale: walletContext.isNew || breakdown.total >= 70,
         };
