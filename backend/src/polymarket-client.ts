@@ -410,12 +410,16 @@ export class PolymarketClient {
    */
   async getVolumeLeaders(limit: number = 10): Promise<Market[]> {
     try {
+      console.log(`[getVolumeLeaders] Fetching top ${limit} markets by volume`);
       const markets = await this.getMarkets(100, true);
-      return markets
+      console.log(`[getVolumeLeaders] Got ${markets.length} markets from getMarkets`);
+      const sorted = markets
         .sort((a, b) => (b.volume || 0) - (a.volume || 0))
         .slice(0, limit);
+      console.log(`[getVolumeLeaders] Returning ${sorted.length} volume leaders`);
+      return sorted;
     } catch (error) {
-      console.error('Error fetching volume leaders:', error);
+      console.error('[getVolumeLeaders] Error fetching volume leaders:', error);
       return [];
     }
   }
