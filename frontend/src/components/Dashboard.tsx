@@ -132,11 +132,11 @@ export function Dashboard() {
             <div className="mb-8">
               <MarketDiscovery />
             </div>
-mb-8">
+
+            <div className="mb-8">
               <CategoryFilter />
             </div>
 
-            <div className="
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div>
                 <AlertList alerts={alerts} />
