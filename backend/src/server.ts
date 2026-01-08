@@ -119,26 +119,31 @@ export class ApiServer {
     });
 
     // Top 10 endpoints - pull from live API
-    // Note: We sample recent 500 trades for "top traders" - this is a snapshot, not full 24h data
+    // Filter to past 24 hours for all top endpoints
+    const get24HoursAgo = () => Math.floor(Date.now() / 1000) - (24 * 60 * 60);
+
     this.app.get('/api/top/traders', async (req: Request, res: Response) => {
       try {
-        const trades = await this.client.getAllRecentTrades(500);
+        const trades = await this.client.getAllRecentTrades(1000);
+        const cutoff = get24HoursAgo();
         const traderVolumes = new Map<string, { volume: number; tradeCount: number }>();
-        
-        trades.forEach(trade => {
-          if (trade.trader_address) {
-            const current = traderVolumes.get(trade.trader_address) || { volume: 0, tradeCount: 0 };
-            current.volume += trade.size * trade.price;
-            current.tradeCount += 1;
-            traderVolumes.set(trade.trader_address, current);
-          }
-        });
-        
+
+        trades
+          .filter(trade => trade.timestamp >= cutoff)
+          .forEach(trade => {
+            if (trade.trader_address) {
+              const current = traderVolumes.get(trade.trader_address) || { volume: 0, tradeCount: 0 };
+              current.volume += trade.size * trade.price;
+              current.tradeCount += 1;
+              traderVolumes.set(trade.trader_address, current);
+            }
+          });
+
         const top = Array.from(traderVolumes.entries())
           .map(([address, data]) => ({ address, volume: data.volume, tradeCount: data.tradeCount }))
           .sort((a, b) => b.volume - a.volume)
           .slice(0, 10);
-        
+
         res.json(top);
       } catch (error) {
         console.error('Top traders error:', error);
@@ -167,8 +172,10 @@ export class ApiServer {
 
     this.app.get('/api/top/trades', async (req: Request, res: Response) => {
       try {
-        const trades = await this.client.getAllRecentTrades(500);
+        const trades = await this.client.getAllRecentTrades(1000);
+        const cutoff = get24HoursAgo();
         const top = trades
+          .filter(trade => trade.timestamp >= cutoff)
           .map(trade => ({
             trader_address: trade.trader_address,
             market_id: trade.market_id,
@@ -188,10 +195,11 @@ export class ApiServer {
       }
     });
 
-    // NEW: Top 10 Most Active Markets (by trade count)
+    // Top 10 Most Active Markets (by trade count) - Past 24 hours
     this.app.get('/api/top/most-active', async (req: Request, res: Response) => {
       try {
         const trades = await this.client.getAllRecentTrades(1000);
+        const cutoff = get24HoursAgo();
         const marketActivity = new Map<string, {
           market_id: string;
           title: string;
@@ -200,24 +208,26 @@ export class ApiServer {
           lastPrice: number;
         }>();
 
-        trades.forEach(trade => {
-          const existing = marketActivity.get(trade.market_id);
-          const value = trade.size * trade.price;
+        trades
+          .filter(trade => trade.timestamp >= cutoff)
+          .forEach(trade => {
+            const existing = marketActivity.get(trade.market_id);
+            const value = trade.size * trade.price;
 
-          if (existing) {
-            existing.tradeCount += 1;
-            existing.volume += value;
-            existing.lastPrice = trade.price;
-          } else {
-            marketActivity.set(trade.market_id, {
-              market_id: trade.market_id,
-              title: trade.title || 'Unknown Market',
-              tradeCount: 1,
-              volume: value,
-              lastPrice: trade.price,
-            });
-          }
-        });
+            if (existing) {
+              existing.tradeCount += 1;
+              existing.volume += value;
+              existing.lastPrice = trade.price;
+            } else {
+              marketActivity.set(trade.market_id, {
+                market_id: trade.market_id,
+                title: trade.title || 'Unknown Market',
+                tradeCount: 1,
+                volume: value,
+                lastPrice: trade.price,
+              });
+            }
+          });
 
         const top = Array.from(marketActivity.values())
           .sort((a, b) => b.tradeCount - a.tradeCount)
@@ -305,10 +315,11 @@ export class ApiServer {
       }
     });
 
-    // NEW: Top 10 Price Movers (estimated from recent trade activity)
+    // Top 10 Price Movers (estimated from recent trade activity) - Past 24 hours
     this.app.get('/api/top/price-movers', async (req: Request, res: Response) => {
       try {
         const trades = await this.client.getAllRecentTrades(1000);
+        const cutoff = get24HoursAgo();
         const marketPrices = new Map<string, {
           market_id: string;
           title: string;
@@ -316,23 +327,25 @@ export class ApiServer {
           volume: number;
         }>();
 
-        // Group trades by market and collect prices
-        trades.forEach(trade => {
-          const existing = marketPrices.get(trade.market_id);
-          const value = trade.size * trade.price;
+        // Group trades by market and collect prices (filtered to past 24h)
+        trades
+          .filter(trade => trade.timestamp >= cutoff)
+          .forEach(trade => {
+            const existing = marketPrices.get(trade.market_id);
+            const value = trade.size * trade.price;
 
-          if (existing) {
-            existing.prices.push(trade.price);
-            existing.volume += value;
-          } else {
-            marketPrices.set(trade.market_id, {
-              market_id: trade.market_id,
-              title: trade.title || 'Unknown Market',
-              prices: [trade.price],
-              volume: value,
-            });
-          }
-        });
+            if (existing) {
+              existing.prices.push(trade.price);
+              existing.volume += value;
+            } else {
+              marketPrices.set(trade.market_id, {
+                market_id: trade.market_id,
+                title: trade.title || 'Unknown Market',
+                prices: [trade.price],
+                volume: value,
+              });
+            }
+          });
 
         // Calculate price change for each market
         const movers = Array.from(marketPrices.values())

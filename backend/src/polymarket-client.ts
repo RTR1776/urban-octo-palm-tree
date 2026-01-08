@@ -318,16 +318,16 @@ export class PolymarketClient {
       
       const markets = response.data || [];
       
-      // Filter by keywords in question text
+      // Filter by keywords in question text - expanded keyword lists for better matching
       const keywords: Record<string, string[]> = {
-        politics: ['trump', 'biden', 'election', 'president', 'congress', 'senate', 'political', 'vote', 'democratic', 'republican'],
-        sports: ['nfl', 'nba', 'mlb', 'nhl', 'soccer', 'football', 'basketball', 'baseball', 'super bowl', 'championship', 'game', 'team'],
-        crypto: ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'blockchain', 'defi', 'nft', 'solana', 'ada'],
-        finance: ['stock', 'market', 'fed', 'economy', 'inflation', 'gdp', 'recession', 'dollar', 'interest rate'],
-        'pop-culture': ['movie', 'film', 'actor', 'celebrity', 'award', 'oscar', 'grammy', 'emmmy', 'music', 'album'],
-        science: ['climate', 'space', 'nasa', 'research', 'study', 'vaccine', 'covid', 'medicine', 'technology'],
-        business: ['company', 'ceo', 'merger', 'ipo', 'earnings', 'amazon', 'apple', 'google', 'tesla', 'meta'],
-        world: ['china', 'russia', 'ukraine', 'europe', 'asia', 'war', 'conflict', 'nato', 'un'],
+        politics: ['trump', 'biden', 'election', 'president', 'congress', 'senate', 'political', 'vote', 'democratic', 'republican', 'democrat', 'gop', 'governor', 'mayor', 'primary', 'nominee', 'poll', 'ballot', 'administration', 'white house', 'cabinet', 'supreme court', 'impeach', 'legislation', 'bill', 'law'],
+        sports: ['nfl', 'nba', 'mlb', 'nhl', 'soccer', 'football', 'basketball', 'baseball', 'super bowl', 'championship', 'game', 'team', 'player', 'coach', 'playoffs', 'finals', 'world series', 'stanley cup', 'mvp', 'draft', 'trade', 'score', 'win', 'loss', 'match', 'tournament', 'league', 'ufc', 'boxing', 'tennis', 'golf', 'f1', 'racing', 'olympics'],
+        crypto: ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'blockchain', 'defi', 'nft', 'solana', 'ada', 'cardano', 'xrp', 'ripple', 'doge', 'dogecoin', 'binance', 'coinbase', 'token', 'altcoin', 'wallet', 'mining', 'staking', 'web3'],
+        finance: ['stock', 'market', 'fed', 'economy', 'inflation', 'gdp', 'recession', 'dollar', 'interest rate', 'wall street', 'nasdaq', 's&p', 'dow', 'bond', 'yield', 'treasury', 'bank', 'federal reserve', 'powell', 'rate cut', 'rate hike', 'cpi', 'jobs report', 'unemployment'],
+        'pop-culture': ['movie', 'film', 'actor', 'actress', 'celebrity', 'award', 'oscar', 'grammy', 'emmy', 'music', 'album', 'song', 'artist', 'singer', 'band', 'concert', 'tour', 'netflix', 'streaming', 'tv show', 'series', 'hollywood', 'entertainment', 'kardashian', 'taylor swift', 'kanye', 'drake', 'beyonce', 'tiktok', 'viral', 'influencer', 'youtube', 'podcast', 'box office'],
+        science: ['climate', 'space', 'nasa', 'research', 'study', 'vaccine', 'covid', 'medicine', 'technology', 'ai', 'artificial intelligence', 'openai', 'spacex', 'mars', 'moon', 'rocket', 'satellite', 'environment', 'carbon', 'energy', 'solar', 'nuclear', 'health', 'fda', 'drug', 'trial', 'breakthrough'],
+        business: ['company', 'ceo', 'merger', 'ipo', 'earnings', 'amazon', 'apple', 'google', 'tesla', 'meta', 'microsoft', 'nvidia', 'revenue', 'profit', 'startup', 'acquisition', 'layoff', 'hire', 'stock price', 'valuation', 'market cap', 'quarter', 'fiscal', 'elon musk', 'bezos', 'zuckerberg'],
+        world: ['china', 'russia', 'ukraine', 'europe', 'asia', 'war', 'conflict', 'nato', 'un', 'israel', 'gaza', 'palestine', 'iran', 'north korea', 'taiwan', 'india', 'uk', 'france', 'germany', 'japan', 'brazil', 'mexico', 'canada', 'saudi', 'opec', 'sanctions', 'treaty', 'diplomat', 'summit', 'g7', 'g20'],
       };
       
       const tagKeywords = keywords[tag.toLowerCase()] || [];

@@ -36,7 +36,7 @@ export function MarketDiscovery() {
           if (!r.ok) throw new Error(`New markets: ${r.status}`);
           return r.json();
         }).catch((e) => { console.error(e); return []; }),
-        fetch(`${API_BASE}/markets/closing-soon?hours=24&limit=10`).then(r => {
+        fetch(`${API_BASE}/markets/closing-soon?hours=168&limit=10`).then(r => {
           if (!r.ok) throw new Error(`Closing markets: ${r.status}`);
           return r.json();
         }).catch((e) => { console.error(e); return []; }),

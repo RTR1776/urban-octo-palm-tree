@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-type TabType = 'traders' | 'markets' | 'trades' | 'active' | 'newWhales' | 'closing' | 'movers';
+type TabType = 'traders' | 'markets' | 'trades' | 'active' | 'closing' | 'movers';
 
 interface TopTrader {
   address: string;
@@ -36,15 +36,6 @@ interface MostActive {
   lastPrice: number;
 }
 
-interface NewWhale {
-  address: string;
-  totalVolume: number;
-  tradeCount: number;
-  largestTrade: number;
-  marketsCount: number;
-  firstSeen: number;
-}
-
 interface ClosingMarket {
   market_id: string;
   question: string;
@@ -69,7 +60,6 @@ export function TopTen() {
   const [topMarkets, setTopMarkets] = useState<TopMarket[]>([]);
   const [topTrades, setTopTrades] = useState<TopTrade[]>([]);
   const [mostActive, setMostActive] = useState<MostActive[]>([]);
-  const [newWhales, setNewWhales] = useState<NewWhale[]>([]);
   const [closingMarkets, setClosingMarkets] = useState<ClosingMarket[]>([]);
   const [priceMovers, setPriceMovers] = useState<PriceMover[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +72,11 @@ export function TopTen() {
 
   const loadData = async () => {
     try {
-      const [traders, markets, trades, active, whales, closing, movers] = await Promise.all([
+      const [traders, markets, trades, active, closing, movers] = await Promise.all([
         fetch(`${API_BASE}/top/traders`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/top/markets`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/top/trades`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/top/most-active`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE}/top/new-whales`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/top/closing-today`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/top/price-movers`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
@@ -95,7 +84,6 @@ export function TopTen() {
       setTopMarkets(markets);
       setTopTrades(trades);
       setMostActive(active);
-      setNewWhales(whales);
       setClosingMarkets(closing);
       setPriceMovers(movers);
     } catch (error) {
@@ -121,13 +109,12 @@ export function TopTen() {
   };
 
   const tabs: { id: TabType; label: string; emoji: string }[] = [
-    { id: 'traders', label: 'Top Traders', emoji: '🐋' },
-    { id: 'markets', label: 'Top Markets', emoji: '📊' },
-    { id: 'trades', label: 'Largest Trades', emoji: '💰' },
-    { id: 'active', label: 'Most Active', emoji: '🔥' },
-    { id: 'newWhales', label: 'New Whales', emoji: '🆕' },
+    { id: 'traders', label: 'Top Traders (24h)', emoji: '🐋' },
+    { id: 'markets', label: 'Top Markets (24h)', emoji: '📊' },
+    { id: 'trades', label: 'Largest Trades (24h)', emoji: '💰' },
+    { id: 'active', label: 'Most Active (24h)', emoji: '🔥' },
     { id: 'closing', label: 'Closing Today', emoji: '⏰' },
-    { id: 'movers', label: 'Price Movers', emoji: '📈' },
+    { id: 'movers', label: 'Price Movers (24h)', emoji: '📈' },
   ];
 
   return (
@@ -243,33 +230,6 @@ export function TopTen() {
                     <p className="text-xs text-gray-500 mt-1">
                       Last price: {(market.lastPrice * 100).toFixed(0)}¢
                     </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* New Whales */}
-            {activeTab === 'newWhales' && (
-              <div className="space-y-3">
-                {newWhales.length === 0 ? (
-                  <div className="text-center text-gray-400 py-4">No new whales detected</div>
-                ) : newWhales.map((whale, index) => (
-                  <div key={whale.address} className="p-3 bg-gray-900 rounded">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-2xl font-bold text-gray-600">#{index + 1}</span>
-                        <span className="px-2 py-1 bg-yellow-900 text-yellow-300 text-xs rounded">NEW</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-400">{formatVolume(whale.totalVolume)}</p>
-                      </div>
-                    </div>
-                    <p className="font-mono text-sm text-gray-300">{formatAddress(whale.address)}</p>
-                    <div className="flex items-center space-x-4 text-xs text-gray-400 mt-2">
-                      <span>{whale.tradeCount} trades</span>
-                      <span>{whale.marketsCount} markets</span>
-                      <span>Largest: {formatVolume(whale.largestTrade)}</span>
-                    </div>
                   </div>
                 ))}
               </div>

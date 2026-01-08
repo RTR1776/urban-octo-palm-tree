@@ -5,7 +5,12 @@ interface Props {
   alerts: Alert[];
 }
 
+const MIN_ALERT_AMOUNT = 1000; // Filter out alerts below $1000
+
 export function AlertList({ alerts }: Props) {
+  // Filter out small alerts below the minimum threshold
+  const filteredAlerts = alerts.filter(alert => !alert.amount || alert.amount >= MIN_ALERT_AMOUNT);
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'HIGH':
@@ -40,13 +45,13 @@ export function AlertList({ alerts }: Props) {
         <h2 className="text-xl font-bold">Recent Alerts</h2>
       </div>
       <div className="max-h-96 overflow-y-auto">
-        {alerts.length === 0 ? (
+        {filteredAlerts.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-400">
             No alerts yet. Monitoring in progress...
           </div>
         ) : (
           <div className="divide-y divide-gray-700">
-            {alerts.slice(0, 20).map((alert) => (
+            {filteredAlerts.slice(0, 20).map((alert) => (
               <div
                 key={alert.id}
                 className={`px-6 py-4 ${getSeverityColor(alert.severity)} border-l-4 ${
