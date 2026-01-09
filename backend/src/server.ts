@@ -436,6 +436,33 @@ export class ApiServer {
       }
     });
 
+    // Hourly volume - aggregate from recent trades
+    this.app.get('/api/volume/hourly', async (req: Request, res: Response) => {
+      try {
+        // Fetch recent trades (up to 2000 to get more coverage)
+        const trades = await this.client.getAllRecentTrades(2000);
+        
+        // Filter to trades within the last hour
+        const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
+        const hourlyTrades = trades.filter(t => t.timestamp > oneHourAgo);
+        
+        // Sum up the total volume
+        const volume = hourlyTrades.reduce((sum, trade) => {
+          return sum + (trade.size * trade.price);
+        }, 0);
+
+        res.json({ 
+          volume,
+          tradeCount: hourlyTrades.length,
+          periodStart: oneHourAgo,
+          periodEnd: Math.floor(Date.now() / 1000),
+        });
+      } catch (error) {
+        console.error('Hourly volume error:', error);
+        res.status(500).json({ error: 'Failed to fetch hourly volume' });
+      }
+    });
+
     // Notification settings
     this.app.get('/api/notifications/settings', (req: Request, res: Response) => {
       // Load from a simple JSON file or env vars

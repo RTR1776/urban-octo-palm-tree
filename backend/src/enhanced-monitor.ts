@@ -158,8 +158,8 @@ export class EnhancedMonitorService {
     const marketQuestion = (trade as any).title || 'Unknown Market';
     const tradeValue = trade.size * trade.price;
 
-    // Skip tiny trades
-    if (tradeValue < 100) return;
+    // Skip small trades - only show $500+ in UI
+    if (tradeValue < 500) return;
 
     // Broadcast trade via WebSocket for real-time updates
     // (Trade is already saved in batch by monitorMarkets)

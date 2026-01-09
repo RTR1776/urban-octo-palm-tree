@@ -1,6 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useWebSocket } from '../useWebSocket';
-import { ApiStatus } from './ApiStatus';
 
 export function Layout() {
   const { connected } = useWebSocket();
@@ -50,7 +49,6 @@ export function Layout() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <ApiStatus />
         <Outlet />
       </main>
     </div>
