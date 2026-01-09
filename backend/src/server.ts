@@ -214,7 +214,23 @@ export class ApiServer {
       try {
         const limit = parseInt(req.query.limit as string) || 100;
         // Pull directly from Polymarket API
-        const trades = await this.client.getAllRecentTrades(limit);
+        const allTrades = await this.client.getAllRecentTrades(limit * 3); // Fetch more to filter
+        
+        // Crypto keywords to exclude
+        const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'sol', 'dogecoin', 'doge', 'xrp', 'cardano', 'ada', 'polygon', 'matic'];
+        const isCryptoMarket = (title: string) => {
+          const lower = title?.toLowerCase() || '';
+          return cryptoKeywords.some(kw => lower.includes(kw));
+        };
+        
+        // Filter to $500+ trades and exclude crypto
+        const trades = allTrades
+          .filter(trade => {
+            const value = trade.size * trade.price;
+            return value >= 500 && !isCryptoMarket(trade.title || '');
+          })
+          .slice(0, limit);
+        
         res.json(trades);
       } catch (error) {
         res.status(500).json({ error: 'Failed to fetch trades' });
@@ -222,14 +238,22 @@ export class ApiServer {
     });
 
     // Top 10 endpoints - pull from live API
-    // Note: We sample recent 500 trades for "top traders" - this is a snapshot, not full 24h data
+    // Fetch 2000 trades for better coverage of past 12 hours
     this.app.get('/api/top/traders', async (req: Request, res: Response) => {
       try {
-        const trades = await this.client.getAllRecentTrades(500);
+        const trades = await this.client.getAllRecentTrades(2000);
+        
+        // Crypto keywords to exclude
+        const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'sol', 'dogecoin', 'doge', 'xrp', 'cardano', 'ada', 'polygon', 'matic'];
+        const isCryptoMarket = (title: string) => {
+          const lower = title?.toLowerCase() || '';
+          return cryptoKeywords.some(kw => lower.includes(kw));
+        };
+        
         const traderVolumes = new Map<string, { volume: number; tradeCount: number }>();
         
         trades.forEach(trade => {
-          if (trade.trader_address) {
+          if (trade.trader_address && !isCryptoMarket(trade.title || '')) {
             const current = traderVolumes.get(trade.trader_address) || { volume: 0, tradeCount: 0 };
             current.volume += trade.size * trade.price;
             current.tradeCount += 1;
@@ -251,8 +275,17 @@ export class ApiServer {
 
     this.app.get('/api/top/markets', async (req: Request, res: Response) => {
       try {
-        const markets = await this.client.getMarkets(50, true);
+        const markets = await this.client.getMarkets(100, true);
+        
+        // Crypto keywords to exclude
+        const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'sol', 'dogecoin', 'doge', 'xrp', 'cardano', 'ada', 'polygon', 'matic'];
+        const isCryptoMarket = (title: string) => {
+          const lower = title?.toLowerCase() || '';
+          return cryptoKeywords.some(kw => lower.includes(kw));
+        };
+        
         const top = markets
+          .filter(m => !isCryptoMarket(m.question || ''))
           .map(m => ({
             market_id: m.id,
             question: m.question,
@@ -270,8 +303,17 @@ export class ApiServer {
 
     this.app.get('/api/top/trades', async (req: Request, res: Response) => {
       try {
-        const trades = await this.client.getAllRecentTrades(500);
+        const trades = await this.client.getAllRecentTrades(2000);
+        
+        // Crypto keywords to exclude
+        const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'sol', 'dogecoin', 'doge', 'xrp', 'cardano', 'ada', 'polygon', 'matic'];
+        const isCryptoMarket = (title: string) => {
+          const lower = title?.toLowerCase() || '';
+          return cryptoKeywords.some(kw => lower.includes(kw));
+        };
+        
         const top = trades
+          .filter(trade => !isCryptoMarket(trade.title || ''))
           .map(trade => ({
             trader_address: trade.trader_address,
             market_id: trade.market_id,
@@ -282,6 +324,7 @@ export class ApiServer {
             timestamp: trade.timestamp,
             value: trade.size * trade.price
           }))
+          .filter(t => t.value >= 500)
           .sort((a, b) => b.value - a.value)
           .slice(0, 10);
         res.json(top);
@@ -467,49 +510,75 @@ export class ApiServer {
     // Whales endpoint - calculate from recent trades
     this.app.get('/api/whales', async (req: Request, res: Response) => {
       try {
-        const trades = await this.client.getAllRecentTrades(1000);
+        const trades = await this.client.getAllRecentTrades(2000);
+        
+        // Crypto keywords to exclude
+        const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'sol', 'dogecoin', 'doge', 'xrp', 'cardano', 'ada', 'polygon', 'matic'];
+        const isCryptoMarket = (title: string) => {
+          const lower = title?.toLowerCase() || '';
+          return cryptoKeywords.some(kw => lower.includes(kw));
+        };
+        
         const whaleMap = new Map<string, {
           trader_address: string;
           total_volume: number;
           trade_count: number;
-          markets: Set<string>;
+          markets: Map<string, { title: string; volume: number }>;
           last_activity: number;
         }>();
         
         trades.forEach(trade => {
           if (!trade.trader_address) return;
+          // Exclude crypto markets
+          if (isCryptoMarket(trade.title || '')) return;
+          
           const value = trade.size * trade.price;
           
           const existing = whaleMap.get(trade.trader_address);
           if (existing) {
             existing.total_volume += value;
             existing.trade_count += 1;
-            existing.markets.add(trade.market_id);
+            const marketData = existing.markets.get(trade.market_id);
+            if (marketData) {
+              marketData.volume += value;
+            } else {
+              existing.markets.set(trade.market_id, { title: trade.title || 'Unknown', volume: value });
+            }
             existing.last_activity = Math.max(existing.last_activity, trade.timestamp);
           } else {
+            const markets = new Map();
+            markets.set(trade.market_id, { title: trade.title || 'Unknown', volume: value });
             whaleMap.set(trade.trader_address, {
               trader_address: trade.trader_address,
               total_volume: value,
               trade_count: 1,
-              markets: new Set([trade.market_id]),
+              markets: markets,
               last_activity: trade.timestamp,
             });
           }
         });
         
-        // Filter to wallets with significant activity and format for frontend
+        // Filter to wallets with $2500+ volume and format for frontend
         const whales = Array.from(whaleMap.values())
-          .filter(w => w.total_volume >= 5000 || w.trade_count >= 5)
-          .map(w => ({
-            trader_address: w.trader_address,
-            market_id: 'multiple',
-            market_question: `Active in ${w.markets.size} market(s)`,
-            total_volume: w.total_volume,
-            trade_count: w.trade_count,
-            first_seen: w.last_activity,
-            last_activity: w.last_activity,
-            is_new_whale: w.trade_count <= 3 && w.total_volume >= 10000,
-          }))
+          .filter(w => w.total_volume >= 2500)
+          .map(w => {
+            // Get top 3 markets by volume for this whale
+            const topMarkets = Array.from(w.markets.values())
+              .sort((a, b) => b.volume - a.volume)
+              .slice(0, 3)
+              .map(m => m.title.length > 40 ? m.title.substring(0, 40) + '...' : m.title);
+            
+            return {
+              trader_address: w.trader_address,
+              market_id: 'multiple',
+              market_question: topMarkets.join(' | ') || 'Unknown',
+              total_volume: w.total_volume,
+              trade_count: w.trade_count,
+              first_seen: w.last_activity,
+              last_activity: w.last_activity,
+              is_new_whale: w.trade_count <= 3 && w.total_volume >= 10000,
+            };
+          })
           .sort((a, b) => b.total_volume - a.total_volume)
           .slice(0, 50);
         

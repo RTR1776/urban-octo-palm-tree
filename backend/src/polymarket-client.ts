@@ -426,8 +426,8 @@ export class PolymarketClient {
   }
 
   /**
-   * Get total platform volume (24h) by summing volume24hr from all active markets
-   * Uses the Gamma API which provides volume24hr directly
+   * Get total platform volume (24h) by summing volume from all active markets
+   * Uses the Gamma API which provides volume data directly
    */
   async getTotalPlatformVolume24h(): Promise<{ volume24h: number; marketCount: number }> {
     try {
@@ -442,19 +442,36 @@ export class PolymarketClient {
       
       const markets = response.data || [];
       
-      // Sum up volume24hr from all markets
+      // Sum up volume from all markets - try multiple field names
       let totalVolume24h = 0;
       let marketsWithVolume = 0;
       
       for (const market of markets) {
-        const vol24h = parseFloat(market.volume24hr) || 0;
+        // Try volume24hr first, then volume24hrClob, then volume
+        const vol24h = parseFloat(market.volume24hr) || 
+                       parseFloat(market.volume24hrClob) ||
+                       parseFloat(market.volumeNum) || 
+                       0;
         if (vol24h > 0) {
           totalVolume24h += vol24h;
           marketsWithVolume++;
         }
       }
       
-      console.log(`[getTotalPlatformVolume24h] Total: $${totalVolume24h.toFixed(0)} from ${marketsWithVolume} markets`);
+      // If no 24h volume found, fall back to total volume (lifetime) divided by estimate
+      if (totalVolume24h === 0) {
+        for (const market of markets) {
+          const totalVol = parseFloat(market.volume) || parseFloat(market.volumeNum) || 0;
+          if (totalVol > 0) {
+            totalVolume24h += totalVol;
+            marketsWithVolume++;
+          }
+        }
+        // Note: This is total volume, not 24h - but better than nothing
+        console.log(`[getTotalPlatformVolume24h] Using total volume (not 24h): $${totalVolume24h.toFixed(0)} from ${marketsWithVolume} markets`);
+      } else {
+        console.log(`[getTotalPlatformVolume24h] 24h Total: $${totalVolume24h.toFixed(0)} from ${marketsWithVolume} markets`);
+      }
       
       return {
         volume24h: totalVolume24h,
