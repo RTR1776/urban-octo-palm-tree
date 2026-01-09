@@ -139,7 +139,13 @@ export function MarketDiscovery() {
   );
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700">
+    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-r from-orange-900 to-red-900 px-6 py-4">
+        <h2 className="text-xl font-bold text-white">🔍 Market Discovery</h2>
+        <p className="text-sm text-orange-300 mt-1">Explore trending and upcoming markets</p>
+      </div>
+      
       <div className="border-b border-gray-700">
         <div className="flex space-x-4 px-6">
           <button

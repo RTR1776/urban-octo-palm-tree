@@ -88,6 +88,76 @@ export class ApiServer {
       }
     });
 
+    // IMPORTANT: Register specific market routes BEFORE :id route
+    // Get volume leader markets
+    this.app.get('/api/markets/volume-leaders', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const leaders = await this.client.getVolumeLeaders(limit);
+        res.json(leaders);
+      } catch (error: any) {
+        console.error('Volume leaders error:', error?.message || error);
+        res.status(500).json({ error: 'Failed to fetch volume leaders' });
+      }
+    });
+
+    // Get newly created markets
+    this.app.get('/api/markets/new', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const newMarkets = await this.client.getNewMarkets(limit);
+        res.json(newMarkets);
+      } catch (error) {
+        console.error('New markets error:', error);
+        res.status(500).json({ error: 'Failed to fetch new markets' });
+      }
+    });
+
+    // Get markets closing soon
+    this.app.get('/api/markets/closing-soon', async (req: Request, res: Response) => {
+      try {
+        const hours = parseInt(req.query.hours as string) || 24;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const closing = await this.client.getClosingSoonMarkets(hours, limit);
+        res.json(closing);
+      } catch (error) {
+        console.error('Closing markets error:', error);
+        res.status(500).json({ error: 'Failed to fetch closing markets' });
+      }
+    });
+
+    // Get markets by category/tag
+    this.app.get('/api/markets/by-tag/:tag', async (req: Request, res: Response) => {
+      try {
+        const tag = req.params.tag;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const markets = await this.client.getMarketsByTag(tag, limit);
+        res.json(markets);
+      } catch (error) {
+        console.error('Markets by tag error:', error);
+        res.status(500).json({ error: 'Failed to fetch markets by tag' });
+      }
+    });
+
+    // Get hot markets (high volume + activity)
+    this.app.get('/api/markets/hot', async (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const topMarkets = await this.client.getVolumeLeaders(limit);
+        const hot = topMarkets.map(market => ({
+          ...market,
+          momentum: (market.volume || 0) / 10000,
+          priceChange: 0,
+          volumeChange: 0,
+        }));
+        res.json(hot);
+      } catch (error) {
+        console.error('Hot markets error:', error);
+        res.status(500).json({ error: 'Failed to fetch hot markets' });
+      }
+    });
+
+    // Now register :id routes AFTER specific routes
     this.app.get('/api/markets/:id', async (req: Request, res: Response) => {
       try {
         const market = await this.client.getMarket(req.params.id);
@@ -104,6 +174,39 @@ export class ApiServer {
         res.json(trades);
       } catch (error) {
         res.status(500).json({ error: 'Failed to fetch trades' });
+      }
+    });
+
+    this.app.get('/api/markets/:id/price-history', async (req: Request, res: Response) => {
+      try {
+        const marketId = req.params.id;
+        const interval = (req.query.interval as any) || '1h';
+        const startTs = req.query.startTs ? parseInt(req.query.startTs as string) : undefined;
+        const endTs = req.query.endTs ? parseInt(req.query.endTs as string) : undefined;
+        const history = await this.client.getPriceHistory(marketId, interval, startTs, endTs);
+        res.json(history);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch price history' });
+      }
+    });
+
+    this.app.get('/api/markets/:id/momentum', async (req: Request, res: Response) => {
+      try {
+        const marketId = req.params.id;
+        const momentum = await this.client.getMarketMomentum(marketId);
+        res.json(momentum || { volumeChange: 0, priceChange: 0, momentumScore: 0 });
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to analyze momentum' });
+      }
+    });
+
+    this.app.get('/api/markets/:id/orderbook-depth', async (req: Request, res: Response) => {
+      try {
+        const tokenId = req.params.id;
+        const depth = await this.client.getOrderBookDepth(tokenId);
+        res.json(depth);
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch orderbook depth' });
       }
     });
 
@@ -436,30 +539,24 @@ export class ApiServer {
       }
     });
 
-    // Hourly volume - aggregate from recent trades
+    // Platform volume - get 24h volume directly from Gamma API
     this.app.get('/api/volume/hourly', async (req: Request, res: Response) => {
       try {
-        // Fetch recent trades (up to 2000 to get more coverage)
-        const trades = await this.client.getAllRecentTrades(2000);
+        // Use Gamma API's volume24hr field which is accurate
+        const { volume24h, marketCount } = await this.client.getTotalPlatformVolume24h();
         
-        // Filter to trades within the last hour
-        const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
-        const hourlyTrades = trades.filter(t => t.timestamp > oneHourAgo);
-        
-        // Sum up the total volume
-        const volume = hourlyTrades.reduce((sum, trade) => {
-          return sum + (trade.size * trade.price);
-        }, 0);
+        // Estimate hourly as 24h / 24 (rough approximation)
+        const estimatedHourly = volume24h / 24;
 
         res.json({ 
-          volume,
-          tradeCount: hourlyTrades.length,
-          periodStart: oneHourAgo,
-          periodEnd: Math.floor(Date.now() / 1000),
+          volume: estimatedHourly,
+          volume24h: volume24h,
+          marketCount: marketCount,
+          note: 'Hourly is estimated as 24h volume / 24',
         });
       } catch (error) {
-        console.error('Hourly volume error:', error);
-        res.status(500).json({ error: 'Failed to fetch hourly volume' });
+        console.error('Volume error:', error);
+        res.status(500).json({ error: 'Failed to fetch volume' });
       }
     });
 
@@ -490,129 +587,6 @@ export class ApiServer {
         res.json(events);
       } catch (error) {
         res.status(500).json({ error: 'Failed to fetch events' });
-      }
-    });
-
-    // Get volume leader markets
-    // Volume leaders
-    console.log('[SETUP] Registering /api/markets/volume-leaders endpoint');
-    this.app.get('/api/markets/volume-leaders', async (req: Request, res: Response) => {
-      console.log('[ENDPOINT HIT] /api/markets/volume-leaders');
-      try {
-        const limit = parseInt(req.query.limit as string) || 10;
-        console.log(`[API] Fetching volume leaders (limit: ${limit})`);
-        const leaders = await this.client.getVolumeLeaders(limit);
-        console.log(`[API] Got leaders:`, leaders);
-        console.log(`[API] Returning ${leaders ? leaders.length : 'null'} volume leaders`);
-        res.json(leaders);
-      } catch (error: any) {
-        console.error('Volume leaders error:', error?.message || error);
-        res.status(500).json({ error: 'Failed to fetch volume leaders' });
-      }
-    });
-
-    // Get newly created markets
-    this.app.get('/api/markets/new', async (req: Request, res: Response) => {
-      try {
-        const limit = parseInt(req.query.limit as string) || 10;
-        console.log(`[API] Fetching new markets (limit: ${limit})`);
-        const newMarkets = await this.client.getNewMarkets(limit);
-        console.log(`[API] Returning ${newMarkets.length} new markets`);
-        res.json(newMarkets);
-      } catch (error) {
-        console.error('New markets error:', error);
-        res.status(500).json({ error: 'Failed to fetch new markets' });
-      }
-    });
-
-    // Get markets closing soon
-    this.app.get('/api/markets/closing-soon', async (req: Request, res: Response) => {
-      try {
-        const hours = parseInt(req.query.hours as string) || 24;
-        const limit = parseInt(req.query.limit as string) || 10;
-        console.log(`[API] Fetching markets closing in ${hours} hours (limit: ${limit})`);
-        const closing = await this.client.getClosingSoonMarkets(hours, limit);
-        console.log(`[API] Returning ${closing.length} closing markets`);
-        res.json(closing);
-      } catch (error) {
-        console.error('Closing markets error:', error);
-        res.status(500).json({ error: 'Failed to fetch closing markets' });
-      }
-    });
-
-    // Get markets by category/tag
-    this.app.get('/api/markets/by-tag/:tag', async (req: Request, res: Response) => {
-      try {
-        const tag = req.params.tag;
-        const limit = parseInt(req.query.limit as string) || 50;
-        console.log(`[API] Fetching markets for tag '${tag}' (limit: ${limit})`);
-        const markets = await this.client.getMarketsByTag(tag, limit);
-        console.log(`[API] Returning ${markets.length} markets for tag '${tag}'`);
-        res.json(markets);
-      } catch (error) {
-        console.error('Markets by tag error:', error);
-        res.status(500).json({ error: 'Failed to fetch markets by tag' });
-      }
-    });
-
-    // Get price history/candlestick data
-    this.app.get('/api/markets/:id/price-history', async (req: Request, res: Response) => {
-      try {
-        const marketId = req.params.id;
-        const interval = (req.query.interval as any) || '1h';
-        const startTs = req.query.startTs ? parseInt(req.query.startTs as string) : undefined;
-        const endTs = req.query.endTs ? parseInt(req.query.endTs as string) : undefined;
-        
-        const history = await this.client.getPriceHistory(marketId, interval, startTs, endTs);
-        res.json(history);
-      } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch price history' });
-      }
-    });
-
-    // Get market momentum analysis
-    this.app.get('/api/markets/:id/momentum', async (req: Request, res: Response) => {
-      try {
-        const marketId = req.params.id;
-        const momentum = await this.client.getMarketMomentum(marketId);
-        res.json(momentum || { volumeChange: 0, priceChange: 0, momentumScore: 0 });
-      } catch (error) {
-        res.status(500).json({ error: 'Failed to analyze momentum' });
-      }
-    });
-
-    // Get orderbook depth for liquidity analysis
-    this.app.get('/api/markets/:id/orderbook-depth', async (req: Request, res: Response) => {
-      try {
-        const tokenId = req.params.id;
-        const depth = await this.client.getOrderBookDepth(tokenId);
-        res.json(depth);
-      } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch orderbook depth' });
-      }
-    });
-
-    // Get hot markets (high volume + activity)
-    this.app.get('/api/markets/hot', async (req: Request, res: Response) => {
-      try {
-        const limit = parseInt(req.query.limit as string) || 10;
-        
-        // Get top volume markets as "hot" for now
-        // Momentum calculation is expensive and may not have enough data
-        const topMarkets = await this.client.getVolumeLeaders(limit);
-        
-        // Add mock momentum data
-        const hot = topMarkets.map(market => ({
-          ...market,
-          momentum: (market.volume || 0) / 10000, // Simple momentum score
-          priceChange: 0, // Would need historical data
-          volumeChange: 0,
-        }));
-
-        res.json(hot);
-      } catch (error) {
-        console.error('Hot markets error:', error);
-        res.status(500).json({ error: 'Failed to fetch hot markets' });
       }
     });
   }

@@ -59,6 +59,14 @@ export const api = {
     return response.data.volume;
   },
 
+  async getPlatformVolume(): Promise<{ volume24h: number; marketCount: number }> {
+    const response = await axios.get(`${API_BASE}/volume/hourly`);
+    return {
+      volume24h: response.data.volume24h || 0,
+      marketCount: response.data.marketCount || 0,
+    };
+  },
+
   async getRecentTrades(limit = 100): Promise<Trade[]> {
     const response = await axios.get(`${API_BASE}/trades/recent`, {
       params: { limit },

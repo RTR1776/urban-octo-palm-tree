@@ -13,9 +13,10 @@ export function WhaleList({ whales }: Props) {
   const sortedWhales = [...whales].sort((a, b) => b.total_volume - a.total_volume);
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700">
-      <div className="px-6 py-4 border-b border-gray-700">
-        <h2 className="text-xl font-bold">Whale Activity</h2>
+    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-r from-cyan-900 to-blue-900 px-6 py-4">
+        <h2 className="text-xl font-bold text-white">🐋 Whale Activity</h2>
+        <p className="text-sm text-cyan-300 mt-1">Large traders in action</p>
       </div>
       <div className="max-h-96 overflow-y-auto">
         {sortedWhales.length === 0 ? (

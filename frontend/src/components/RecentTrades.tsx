@@ -7,9 +7,10 @@ interface Props {
 
 export function RecentTrades({ trades }: Props) {
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700">
-      <div className="px-6 py-4 border-b border-gray-700">
-        <h2 className="text-xl font-bold">Recent Trades</h2>
+    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 to-green-900 px-6 py-4">
+        <h2 className="text-xl font-bold text-white">💰 Recent Trades</h2>
+        <p className="text-sm text-emerald-300 mt-1">Live trading activity ($500+)</p>
       </div>
       <div className="max-h-96 overflow-y-auto">
         {trades.length === 0 ? (
