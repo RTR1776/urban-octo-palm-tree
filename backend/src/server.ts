@@ -5,6 +5,7 @@ import { DatabaseService } from './database';
 import { PolymarketClient } from './polymarket-client';
 import { KalshiClient } from './kalshi-client';
 import { WebSocketServer } from './websocket-server';
+import { createAnalyticsRoutes } from './routes/analytics-routes';
 
 export class ApiServer {
   private app: express.Application;
@@ -658,6 +659,10 @@ export class ApiServer {
         res.status(500).json({ error: 'Failed to fetch events' });
       }
     });
+
+    // Analytics routes - new advanced analytics endpoints
+    const analyticsRoutes = createAnalyticsRoutes(this.db, this.client);
+    this.app.use('/api/analytics', analyticsRoutes);
   }
 
   /**
