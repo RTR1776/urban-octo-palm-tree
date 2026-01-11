@@ -83,6 +83,67 @@ export interface NormalizedTrade {
   source: 'kalshi';
 }
 
+// Trading-specific types
+export interface KalshiBalance {
+  balance: number; // cents
+  payout_pending: number;
+  payout_finalized: number;
+}
+
+export interface KalshiPosition {
+  ticker: string;
+  market_ticker: string;
+  position: number; // positive = long yes, negative = long no
+  resting_orders_count: number;
+  total_traded: number;
+  fees_paid: number;
+  realized_pnl: number;
+}
+
+export interface KalshiOrder {
+  order_id: string;
+  user_id: string;
+  ticker: string;
+  action: 'buy' | 'sell';
+  side: 'yes' | 'no';
+  yes_price: number; // cents
+  no_price: number;
+  count: number; // quantity
+  remaining_count: number;
+  type: 'market' | 'limit';
+  status: 'resting' | 'filled' | 'canceled';
+  created_time: string;
+  placed_time?: string;
+  updated_time?: string;
+  close_cancel_count: number;
+  decrease_count: number;
+}
+
+export interface KalshiFill {
+  fill_id: string;
+  order_id: string;
+  ticker: string;
+  side: 'yes' | 'no';
+  yes_price: number;
+  no_price: number;
+  count: number;
+  action: 'buy' | 'sell';
+  created_time: string;
+  trade_id: string;
+  is_taker: boolean;
+}
+
+export interface OrderRequest {
+  ticker: string;
+  action: 'buy' | 'sell';
+  side: 'yes' | 'no';
+  count: number; // quantity
+  type: 'market' | 'limit';
+  yes_price?: number; // For limit orders, in cents
+  no_price?: number;
+  expiration_ts?: number; // Unix timestamp
+}
+
 export class KalshiClient {
   private api: AxiosInstance;
   private authenticated: boolean = false;
@@ -361,5 +422,219 @@ export class KalshiClient {
 
   isAuthenticated(): boolean {
     return this.authenticated;
+  }
+
+  // ========== Trading Methods ==========
+
+  /**
+   * Get account balance
+   * REQUIRES AUTHENTICATION
+   */
+  async getBalance(): Promise<KalshiBalance | null> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const response = await this.api.get('/portfolio/balance');
+      return response.data.balance;
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching balance:', error?.response?.data || error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get all positions
+   * REQUIRES AUTHENTICATION
+   */
+  async getPositions(): Promise<KalshiPosition[]> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const response = await this.api.get('/portfolio/positions', {
+        params: {
+          limit: 1000,
+          settlement_status: 'unsettled', // Get only active positions
+        },
+      });
+      return response.data.positions || [];
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching positions:', error?.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get orders (with optional filtering)
+   * REQUIRES AUTHENTICATION
+   */
+  async getOrders(status?: 'resting' | 'filled' | 'canceled', limit: number = 100): Promise<KalshiOrder[]> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const params: any = { limit };
+      if (status) {
+        params.status = status;
+      }
+
+      const response = await this.api.get('/portfolio/orders', { params });
+      return response.data.orders || [];
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching orders:', error?.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get fills (executed trades)
+   * REQUIRES AUTHENTICATION
+   */
+  async getFills(ticker?: string, limit: number = 100): Promise<KalshiFill[]> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const params: any = { limit };
+      if (ticker) {
+        params.ticker = ticker;
+      }
+
+      const response = await this.api.get('/portfolio/fills', { params });
+      return response.data.fills || [];
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching fills:', error?.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Place an order
+   * REQUIRES AUTHENTICATION
+   */
+  async placeOrder(order: OrderRequest): Promise<KalshiOrder | null> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      // Validate order
+      if (order.type === 'limit') {
+        if (!order.yes_price && !order.no_price) {
+          throw new Error('Limit order requires yes_price or no_price');
+        }
+        // Ensure only one price is set based on side
+        if (order.side === 'yes' && !order.yes_price) {
+          throw new Error('Buy/Sell YES requires yes_price');
+        }
+        if (order.side === 'no' && !order.no_price) {
+          throw new Error('Buy/Sell NO requires no_price');
+        }
+      }
+
+      const response = await this.api.post('/portfolio/orders', order);
+      console.log(`[Kalshi] Order placed: ${order.action} ${order.count} ${order.side} @ ${order.ticker}`);
+      return response.data.order;
+    } catch (error: any) {
+      console.error('[Kalshi] Error placing order:', error?.response?.data || error.message);
+      throw error; // Re-throw for caller to handle
+    }
+  }
+
+  /**
+   * Cancel an order
+   * REQUIRES AUTHENTICATION
+   */
+  async cancelOrder(orderId: string): Promise<boolean> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      await this.api.delete(`/portfolio/orders/${orderId}`);
+      console.log(`[Kalshi] Order cancelled: ${orderId}`);
+      return true;
+    } catch (error: any) {
+      console.error(`[Kalshi] Error cancelling order ${orderId}:`, error?.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Decrease order quantity
+   * REQUIRES AUTHENTICATION
+   */
+  async decreaseOrder(orderId: string, reduceBy: number): Promise<KalshiOrder | null> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const response = await this.api.post(`/portfolio/orders/${orderId}/decrease`, {
+        reduce_by: reduceBy,
+      });
+      console.log(`[Kalshi] Order decreased: ${orderId} by ${reduceBy}`);
+      return response.data.order;
+    } catch (error: any) {
+      console.error(`[Kalshi] Error decreasing order ${orderId}:`, error?.response?.data || error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get portfolio summary
+   * REQUIRES AUTHENTICATION
+   */
+  async getPortfolioSummary(): Promise<any> {
+    await this.ensureAuthenticated();
+
+    if (!this.authenticated) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const [balance, positions, restingOrders] = await Promise.all([
+        this.getBalance(),
+        this.getPositions(),
+        this.getOrders('resting'),
+      ]);
+
+      const totalPositionValue = positions.reduce((sum, p) => sum + Math.abs(p.position), 0);
+      const totalPnL = positions.reduce((sum, p) => sum + p.realized_pnl, 0);
+
+      return {
+        balance,
+        positions,
+        restingOrders,
+        summary: {
+          totalPositionValue,
+          totalPnL,
+          openOrdersCount: restingOrders.length,
+          positionsCount: positions.length,
+        },
+      };
+    } catch (error: any) {
+      console.error('[Kalshi] Error fetching portfolio summary:', error?.response?.data || error.message);
+      return null;
+    }
   }
 }
