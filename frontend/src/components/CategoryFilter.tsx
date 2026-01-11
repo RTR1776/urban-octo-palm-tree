@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Market } from '../types';
-import { PriceChart } from './PriceChart';
-import { LiquidityHeatmap } from './LiquidityHeatmap';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -17,12 +15,16 @@ const CATEGORIES = [
   { id: 'world', name: 'World', emoji: '🌍' },
 ];
 
+const formatVolume = (volume: number) => {
+  if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
+  if (volume >= 1000) return `$${(volume / 1000).toFixed(0)}K`;
+  return `$${volume.toFixed(0)}`;
+};
+
 export function CategoryFilter() {
   const [selectedCategory, setSelectedCategory] = useState<string>('politics');
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'chart' | 'liquidity'>('list');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,10 +35,10 @@ export function CategoryFilter() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE}/markets/by-tag/${selectedCategory}?limit=50`);
+      const response = await fetch(`${API_BASE}/markets/by-tag/${selectedCategory}?limit=20`);
       
       if (!response.ok) {
-        setError(`Backend API returned ${response.status}. API: ${API_BASE}`);
+        setError(`API returned ${response.status}`);
         setMarkets([]);
         return;
       }
@@ -46,200 +48,94 @@ export function CategoryFilter() {
       setMarkets(marketArray);
       
       if (marketArray.length === 0) {
-        setError(`No ${selectedCategory} markets found. Backend may need deployment.`);
-      }
-      
-      // Auto-select first market for charts
-      if (marketArray.length > 0 && !selectedMarket) {
-        setSelectedMarket(marketArray[0]);
+        setError(`No ${selectedCategory} markets found`);
       }
     } catch (error) {
       console.error('Error loading category markets:', error);
-      setError(`Connection failed. Check VITE_API_URL: ${API_BASE}`);
+      setError('Connection failed');
       setMarkets([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatVolume = (volume: number) => {
-    if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
-    if (volume >= 1000) return `$${(volume / 1000).toFixed(0)}K`;
-    return `$${volume.toFixed(0)}`;
-  };
+  const currentCategory = CATEGORIES.find(c => c.id === selectedCategory);
 
   return (
-    <div className="space-y-6">
-      {/* Category Selector */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-        <div className="bg-gradient-to-r from-purple-900 to-indigo-900 px-6 py-4">
-          <h3 className="text-xl font-bold text-white">🏷️ Browse by Category</h3>
-          <p className="text-sm text-purple-300 mt-1">Filter markets by topic</p>
+    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 px-6 py-4">
+        <h3 className="text-xl font-bold text-white">🏷️ Browse by Category</h3>
+        <p className="text-sm text-purple-300 mt-1">Filter markets by topic</p>
+      </div>
+      
+      {/* Category Pills */}
+      <div className="p-4 border-b border-gray-700">
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`px-3 py-1.5 rounded-full font-medium text-sm transition-all ${
+                selectedCategory === category.id
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <span className="mr-1">{category.emoji}</span>
+              {category.name}
+            </button>
+          ))}
         </div>
-        
-        <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {CATEGORIES.map(category => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`p-3 rounded-lg font-medium text-sm transition-colors ${
-                  selectedCategory === category.id
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+      </div>
+
+      {/* Markets List */}
+      <div className="p-4">
+        {loading ? (
+          <div className="text-center text-gray-400 py-6">
+            <div className="animate-pulse">Loading {currentCategory?.name} markets...</div>
+          </div>
+        ) : error ? (
+          <div className="text-center py-6">
+            <div className="text-yellow-400 mb-2">⚠️ {error}</div>
+          </div>
+        ) : markets.length === 0 ? (
+          <div className="text-center text-gray-400 py-6">
+            No markets found
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500 mb-3">
+              {currentCategory?.emoji} Showing {markets.length} {currentCategory?.name} markets
+            </div>
+            {markets.slice(0, 10).map((market, index) => (
+              <div
+                key={market.id}
+                className="flex items-start gap-3 p-3 bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors border border-gray-700/50"
               >
-                <span className="mr-2">{category.emoji}</span>
-                {category.name}
-              </button>
+                <div className="flex-shrink-0 w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-bold text-gray-500">#{index + 1}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-gray-200 line-clamp-2 leading-tight">
+                    {market.question}
+                  </h4>
+                  <div className="flex items-center gap-4 mt-2 text-xs">
+                    <span className="text-gray-400">
+                      Vol: <span className="text-green-400 font-semibold">{formatVolume(market.volume || 0)}</span>
+                    </span>
+                    {market.liquidity && market.liquidity > 0 && (
+                      <span className="text-gray-400">
+                        Liq: <span className="text-blue-400 font-semibold">{formatVolume(market.liquidity)}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
-
-      {/* View Mode Selector */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-400">View:</span>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              viewMode === 'list'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            📋 List
-          </button>
-          <button
-            onClick={() => setViewMode('chart')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              viewMode === 'chart'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            📈 Charts
-          </button>
-          <button
-            onClick={() => setViewMode('liquidity')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              viewMode === 'liquidity'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            📊 Liquidity
-          </button>
-        </div>
-      </div>
-
-      {/* Content Area */}
-      {loading ? (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center text-gray-400">
-          Loading markets...
-        </div>
-      ) : error ? (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
-          <div className="text-yellow-400 mb-2">⚠️ {error}</div>
-          <div className="text-xs text-gray-500 mt-2">Make sure your backend is deployed and VITE_API_URL is set</div>
-        </div>
-      ) : markets.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center text-gray-400">
-          No markets found for this category
-        </div>
-      ) : (
-        <>
-          {viewMode === 'list' && (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-              <h3 className="text-lg font-bold mb-4">
-                {CATEGORIES.find(c => c.id === selectedCategory)?.emoji}{' '}
-                {CATEGORIES.find(c => c.id === selectedCategory)?.name} Markets ({markets.length})
-              </h3>
-              
-              <div className="space-y-3">
-                {markets.slice(0, 20).map(market => (
-                  <div
-                    key={market.id}
-                    onClick={() => setSelectedMarket(market)}
-                    className={`p-4 bg-gray-900 rounded-lg hover:bg-gray-850 transition-colors cursor-pointer ${
-                      selectedMarket?.id === market.id ? 'ring-2 ring-blue-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 mr-4">
-                        <h4 className="text-sm font-medium text-gray-200 line-clamp-2">
-                          {market.question}
-                        </h4>
-                        <div className="mt-2 flex items-center space-x-4 text-xs text-gray-400">
-                          <span>
-                            Volume: <span className="text-green-400 font-semibold">
-                              {formatVolume(market.volume || 0)}
-                            </span>
-                          </span>
-                          {market.liquidity && (
-                            <span>
-                              Liquidity: <span className="text-blue-400 font-semibold">
-                                {formatVolume(market.liquidity)}
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {market.tokens && market.tokens[0] && (
-                          <div className="text-2xl font-bold text-blue-400">
-                            {(market.tokens[0].price * 100).toFixed(0)}¢
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'chart' && selectedMarket && (
-            <div className="space-y-6">
-              <PriceChart
-                marketId={selectedMarket.id}
-                marketQuestion={selectedMarket.question}
-                interval="1h"
-                height={400}
-              />
-              
-              {/* Market selector for charts */}
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Select Market to Chart:
-                </label>
-                <select
-                  value={selectedMarket.id}
-                  onChange={(e) => {
-                    const market = markets.find(m => m.id === e.target.value);
-                    if (market) setSelectedMarket(market);
-                  }}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200"
-                >
-                  {markets.slice(0, 20).map(market => (
-                    <option key={market.id} value={market.id}>
-                      {market.question.slice(0, 100)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'liquidity' && (
-            <LiquidityHeatmap
-              marketIds={markets.slice(0, 10).map(m => m.id)}
-              markets={markets}
-            />
-          )}
-        </>
-      )}
     </div>
   );
 }

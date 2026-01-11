@@ -155,14 +155,11 @@ export function Dashboard() {
               <TopTen />
             </div>
 
-            {/* New features - gracefully degrade if APIs not available */}
-            <div className="mb-8">
+            {/* Market Analytics Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               <ErrorBoundary>
                 <MarketDiscovery />
               </ErrorBoundary>
-            </div>
-
-            <div className="mb-8">
               <ErrorBoundary>
                 <CategoryFilter />
               </ErrorBoundary>
