@@ -65,3 +65,70 @@ export interface MarketStats {
   price_change_24h: number;
   largest_trade_24h: number;
 }
+
+// ========== Analytics Types ==========
+
+export interface PriceHistory {
+  id?: number;
+  market_id: string;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+}
+
+export interface MarketMetrics {
+  market_id: string;
+  volatility_24h: number;
+  momentum_24h: number;
+  spread_pct: number;
+  depth_score: number;
+  sharpe_ratio: number;
+  volume_trend: number;
+  price_trend: number;
+  trader_count_24h: number;
+  updated_at: number;
+}
+
+export interface MarketCategory {
+  market_id: string;
+  category: string;
+  confidence: number;
+}
+
+export interface MarketCorrelation {
+  market_id_1: string;
+  market_id_2: string;
+  correlation: number;
+  lookback_hours: number;
+  updated_at: number;
+}
+
+export interface CategoryStats {
+  category: string;
+  marketCount: number;
+  totalVolume24h?: number;
+  avgVolume24h?: number;
+  totalLiquidity?: number;
+  topMarket?: {
+    id: string;
+    question: string;
+    volume: number;
+  } | null;
+}
+
+export interface MarketComparison {
+  market1: Market & { metrics: MarketMetrics };
+  market2: Market & { metrics: MarketMetrics };
+  correlation: number;
+}
+
+export interface MarketFilter {
+  minVolume?: number;
+  minLiquidity?: number;
+  categories?: string[];
+  excludeCategories?: string[];
+}
