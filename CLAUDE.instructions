@@ -1,908 +1,798 @@
 # CLAUDE.instructions
-## Comprehensive Market Analysis Platform Enhancement Plan
+## Dual-Platform Prediction Market Trading Terminal
 
 ### Executive Summary
-Transform the current alert-focused Polymarket/Kalshi monitoring tool into a sophisticated, multi-dimensional market analysis platform with advanced data visualization, comparable to professional trading platforms like TradingView and Bloomberg Terminal.
+Transform the Polymarket analytics platform into a **professional trading terminal** that executes trades on Kalshi while leveraging Polymarket's whale intelligence and transparency. The platform will detect arbitrage opportunities, provide trade signals based on whale activity, and enable both manual and automated trading.
+
+**Primary Goal**: Enable profitable trading on Kalshi (US-regulated) by monitoring Polymarket whale activity and identifying cross-platform arbitrage opportunities.
 
 ---
 
-## Current State Analysis
+## Platform Strategy: Best of Both Worlds
 
-### What We Have
-- **Backend**: Express API with SQLite, Polymarket & Kalshi integration, alert system
-- **Frontend**: React SPA with basic dashboard, alerts, whale tracking
-- **Data Sources**:
-  - Polymarket CLOB API (orderbooks, prices)
-  - Polymarket Gamma API (markets, events, metadata)
-  - Polymarket Data API (trades, price history, user activity)
-  - Kalshi API (markets, trades, events, orderbook)
-- **Current Features**:
-  - Real-time trade monitoring
-  - Whale detection (large traders)
-  - Alert system for unusual activity
-  - Basic market lists and stats
+### Why This Hybrid Approach?
 
-### Current Limitations
-1. **Alert-centric**: Everything revolves around quick alerts, not deep analysis
-2. **Limited visualization**: Only basic lists and simple charts
-3. **No comparative analysis**: Can't compare markets, trends, or time periods
-4. **Shallow metrics**: Missing key financial indicators (momentum, volatility, correlation)
-5. **No filtering/grouping**: Can't segment data by category, time, or custom criteria
-6. **Crypto market noise**: Small trades and crypto markets clutter useful data
-7. **No portfolio simulation**: Can't track hypothetical positions or strategies
+**Kalshi Strengths** (Trading Execution):
+- ✅ US-regulated (CFTC) - Legal for US traders
+- ✅ 60% market share - Higher liquidity
+- ✅ $5.8B monthly volume (Nov 2025)
+- ✅ Bot trading API support
+- ✅ Institutional participation
+
+**Polymarket Strengths** (Market Intelligence):
+- ✅ Public trader addresses - Track whale behavior
+- ✅ Full trade transparency
+- ✅ Whale clustering detection
+- ✅ Sentiment signals from large traders
+- ✅ Early market movement indicators
+
+**Synergy**: Use Polymarket whale activity as **leading indicators** for Kalshi trades.
 
 ---
 
-## Research Findings
+## Implementation Roadmap
 
-### Polymarket API Capabilities
+### Phase 1: Kalshi Account Integration (Week 1-2)
+**Goal**: Authenticate with Kalshi, fetch account data, display positions
 
-#### CLOB API (https://clob.polymarket.com)
-- Order management and execution
-- Real-time orderbook data
-- Price feeds and midpoints
-- WebSocket for live updates (`wss://ws-subscriptions-clob.polymarket.com/ws/`)
+#### Backend Tasks:
+1. **Enhanced Kalshi Client** (`backend/src/kalshi-client.ts`)
+   - Add authentication methods (email/password → token)
+   - Token refresh logic
+   - Secure credential storage
+   - Demo vs production mode toggle
 
-#### Gamma API (https://gamma-api.polymarket.com)
-- Market discovery and metadata
-- Event groupings (related markets)
-- Tags and categories
-- Market volume and liquidity stats
-- Closing dates and active status
+2. **Kalshi Trading Service** (`backend/src/trading/kalshi-trading-service.ts`)
+   - `authenticate()` - Login and get auth token
+   - `getBalance()` - Fetch account balance
+   - `getPositions()` - Fetch open positions
+   - `getOrderHistory()` - Past orders
+   - `placeOrder()` - Submit new order
+   - `cancelOrder()` - Cancel pending order
+   - `getTradeHistory()` - Executed trades
 
-#### Data API (https://data-api.polymarket.com)
-- Historical price data (OHLCV format)
-- Trade history with trader addresses
-- User positions and activity
-- Market-level statistics
-- Supports various time intervals: 1m, 5m, 1h, 1d
-
-#### WebSocket Feeds
-- RTDS (`wss://ws-live-data.polymarket.com`): Real-time crypto prices and comments
-- Market channel: Live orderbook updates
-- User channel: Personal order status (requires auth)
-
-### Kalshi API Capabilities
-
-#### Market Data Endpoints
-- `/markets`: List all markets with filtering
-- `/markets/{ticker}`: Detailed market info
-- `/markets/{ticker}/trades`: Trade history
-- `/markets/{ticker}/orderbook`: Live orderbook
-- `/events`: Event groupings
-
-#### Features
-- WebSocket support for real-time updates
-- Historical trade data
-- Market status and settlement info
-- Volume and liquidity metrics
-- Category/topic filtering
-
-### Best-in-Class Visualization Patterns
-
-#### TradingView Features
-1. **Multiple chart types**: Candlesticks, Renko, area, volume-based
-2. **Technical indicators**: 100+ built-in (MA, VWAP, RSI, MACD, Bollinger Bands)
-3. **Screeners & heatmaps**: Visual market scanning
-4. **Drawing tools**: Trendlines, Fibonacci, support/resistance
-5. **Comparison mode**: Overlay multiple assets
-6. **Custom timeframes**: 1m to 1M, custom ranges
-7. **Alert system**: Price, indicator, or pattern-based
-8. **Social features**: Shared ideas and strategies
-
-#### Bloomberg Terminal Features
-1. **Multi-asset monitoring**: Track multiple markets simultaneously
-2. **Treemaps**: Market movement visualization
-3. **News integration**: Headlines linked to price movements
-4. **Professional charting**: Exportable, annotation-rich
-5. **Curve building**: Natural language chart creation
-6. **Relationship analysis**: Correlation matrices
-7. **Real-time collaboration**: Shared workspaces
-
-#### Key Visualization Principles
-- **For trends**: Line charts (time series)
-- **For comparisons**: Bar charts (side-by-side)
-- **For distributions**: Histograms, heatmaps
-- **For relationships**: Scatter plots, correlation matrices
-- **For hierarchies**: Treemaps, sunbursts
-- **For part-to-whole**: Pie charts (use sparingly)
-
----
-
-## Proposed Architecture Enhancement
-
-### New Backend Services
-
-#### 1. Market Analytics Service (`backend/src/analytics/`)
-```
-- market-analyzer.ts: Calculate advanced metrics (volatility, momentum, correlation)
-- comparative-analyzer.ts: Compare markets, time periods, platforms
-- historical-aggregator.ts: Roll up historical data into useful summaries
-- trend-detector.ts: Identify emerging trends using statistical methods
-```
-
-#### 2. Data Aggregation Layer (`backend/src/aggregation/`)
-```
-- time-series-aggregator.ts: OHLCV data from multiple sources
-- category-aggregator.ts: Group markets by topic/category
-- platform-aggregator.ts: Combine Polymarket + Kalshi data
-- cache-manager.ts: Intelligent caching for expensive computations
-```
-
-#### 3. Enhanced Database Schema
-**New Tables:**
-- `price_history`: OHLCV data (open, high, low, close, volume)
-- `market_metrics`: Pre-calculated metrics (volatility, momentum, spread)
-- `market_categories`: Tag-based categorization
-- `market_correlations`: Cross-market relationships
-- `platform_stats`: Platform-wide aggregates
-- `user_watchlists`: Custom market tracking
-- `custom_portfolios`: Simulated position tracking
-
-#### 4. New API Endpoints
-```
-GET  /api/analytics/market/:id/metrics          # All metrics for one market
-GET  /api/analytics/market/:id/compare/:otherId # Compare two markets
-GET  /api/analytics/categories                   # Market categories with stats
-GET  /api/analytics/category/:tag/performance   # Category-level metrics
-GET  /api/analytics/platform/overview           # Platform-wide stats
-GET  /api/analytics/correlation-matrix          # Market correlation heatmap
-GET  /api/analytics/volume-distribution         # Volume by category/time
-GET  /api/analytics/trader-distribution         # Trader size distribution
-POST /api/portfolio/simulate                     # Run portfolio simulation
-GET  /api/portfolio/:id/performance             # Track simulated portfolio
-GET  /api/timeseries/:marketId                  # OHLCV with flexible intervals
-GET  /api/watchlist/:userId                     # User's tracked markets
-POST /api/watchlist/:userId/add                 # Add market to watchlist
-```
-
-### New Frontend Architecture
-
-#### Page Structure
-```
-src/pages/
-  - AnalyticsDashboardPage.tsx     # Main analytics hub
-  - MarketExplorerPage.tsx         # Deep-dive on single market
-  - ComparisonPage.tsx             # Side-by-side market comparison
-  - CategoryAnalysisPage.tsx       # Category/topic performance
-  - PlatformOverviewPage.tsx       # Polymarket vs Kalshi stats
-  - PortfolioSimulatorPage.tsx     # Strategy testing
-  - ScreenerPage.tsx               # Filter/find markets
-  - HeatmapPage.tsx                # Visual market overview
-```
-
-#### Component Library
-```
-src/components/charts/
-  - CandlestickChart.tsx           # OHLCV visualization
-  - AreaChart.tsx                  # Smooth price trends
-  - VolumeChart.tsx                # Trading volume bars
-  - CorrelationMatrix.tsx          # Heatmap of market relationships
-  - Treemap.tsx                    # Hierarchical data (categories)
-  - ScatterPlot.tsx                # Price vs volume, etc.
-  - MultiLineChart.tsx             # Compare multiple markets
-  - WaterfallChart.tsx             # Cumulative changes
-
-src/components/analytics/
-  - MetricsCard.tsx                # Key stats display
-  - PerformanceTable.tsx           # Sortable market performance
-  - MarketScreener.tsx             # Filter interface
-  - TimeRangeSelector.tsx          # 1h, 24h, 7d, 30d, custom
-  - CategorySelector.tsx           # Topic/tag filtering
-  - PlatformToggle.tsx             # Polymarket / Kalshi / Both
-  - IndicatorSelector.tsx          # Choose metrics to display
-
-src/components/simulation/
-  - PortfolioBuilder.tsx           # Construct hypothetical positions
-  - PerformanceTracker.tsx         # Track P&L over time
-  - StrategyTester.tsx             # Backtest trading strategies
-```
-
-#### Charting Library Selection
-**Recommended: Recharts + D3.js hybrid**
-- **Recharts**: Pre-built React charts (already in use)
-- **D3.js**: Custom advanced visualizations (correlation matrices, treemaps)
-- **react-financial-charts**: Specialized for candlesticks/OHLCV
-- **Plotly.js**: Interactive 3D visualizations if needed
-
----
-
-## Key Features to Build
-
-### Phase 1: Core Analytics Infrastructure (Weeks 1-2)
-
-#### 1.1 Enhanced Time-Series Data Collection
-- Pull historical price data for all active markets
-- Store OHLCV (candlestick) data in database
-- Support multiple time intervals: 5m, 15m, 1h, 4h, 1d
-- Background job to continuously update historical data
-
-#### 1.2 Market Metrics Engine
-Calculate and store:
-- **Volatility**: Standard deviation of price changes
-- **Momentum**: Rate of price change (velocity)
-- **Spread**: Bid-ask spread percentage
-- **Depth**: Total volume at top 5 bid/ask levels
-- **Turnover**: Volume / Market cap ratio
-- **Price Impact**: How large trades move price
-- **Sharpe Ratio**: Risk-adjusted returns
-
-#### 1.3 Category/Tag System
-- Auto-categorize markets using keyword matching (politics, sports, crypto, etc.)
-- Support custom user tags
-- Aggregate metrics by category
-- Category performance leaderboard
-
-#### 1.4 Database Migration
-Create new tables:
+3. **Database Schema** (`backend/src/database.ts`)
 ```sql
-CREATE TABLE price_history (
-  id INTEGER PRIMARY KEY,
-  market_id TEXT,
-  timestamp INTEGER,
-  open REAL,
-  high REAL,
-  low REAL,
-  close REAL,
-  volume REAL,
-  interval TEXT -- '5m', '1h', '1d', etc.
+CREATE TABLE kalshi_auth (
+  user_id TEXT PRIMARY KEY,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  expires_at INTEGER NOT NULL,
+  demo_mode BOOLEAN DEFAULT 0
 );
 
-CREATE TABLE market_metrics (
-  market_id TEXT PRIMARY KEY,
-  volatility_24h REAL,
-  momentum_24h REAL,
-  spread_pct REAL,
-  depth_score REAL,
+CREATE TABLE kalshi_orders (
+  id TEXT PRIMARY KEY,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL, -- 'buy' or 'sell'
+  type TEXT NOT NULL, -- 'market', 'limit'
+  quantity INTEGER NOT NULL,
+  limit_price INTEGER, -- cents
+  status TEXT NOT NULL, -- 'pending', 'filled', 'cancelled', 'rejected'
+  created_at INTEGER NOT NULL,
+  filled_at INTEGER,
+  fill_price INTEGER,
+  commission INTEGER DEFAULT 0
+);
+
+CREATE TABLE kalshi_positions (
+  ticker TEXT PRIMARY KEY,
+  side TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  avg_entry_price INTEGER NOT NULL,
+  current_price INTEGER,
+  unrealized_pnl INTEGER,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE kalshi_trades (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  price INTEGER NOT NULL,
+  commission INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL,
+  FOREIGN KEY (order_id) REFERENCES kalshi_orders(id)
+);
+```
+
+4. **API Routes** (`backend/src/routes/kalshi-trading-routes.ts`)
+```typescript
+POST   /api/kalshi/auth/login         - Authenticate
+GET    /api/kalshi/auth/status        - Check if logged in
+POST   /api/kalshi/auth/logout        - Clear session
+GET    /api/kalshi/account/balance    - Get balance
+GET    /api/kalshi/account/positions  - Open positions
+GET    /api/kalshi/orders             - Order history
+GET    /api/kalshi/orders/pending     - Active orders
+POST   /api/kalshi/orders             - Place order
+DELETE /api/kalshi/orders/:id         - Cancel order
+GET    /api/kalshi/trades             - Trade history
+```
+
+#### Frontend Tasks:
+1. **Kalshi Login Component** (`frontend/src/components/trading/KalshiLogin.tsx`)
+   - Email/password form
+   - Demo mode toggle
+   - Login status indicator
+   - Logout button
+
+2. **Account Dashboard** (`frontend/src/pages/trading/AccountDashboard.tsx`)
+   - Current balance display
+   - Open positions table (ticker, side, qty, entry price, current price, P&L)
+   - Order history (pending/filled/cancelled)
+   - Trade history with performance metrics
+
+3. **Hooks** (`frontend/src/hooks/`)
+   - `useKalshiAuth.ts` - Authentication state
+   - `useKalshiBalance.ts` - Balance fetching
+   - `useKalshiPositions.ts` - Position fetching
+   - `useKalshiOrders.ts` - Order management
+
+4. **Navigation** - Add "Trading" link to navbar
+
+---
+
+### Phase 2: Market Matching & Arbitrage Detection (Week 2-3)
+**Goal**: Automatically identify equivalent markets across platforms, detect price spreads
+
+#### Backend Tasks:
+1. **Market Matching Service** (`backend/src/matching/market-matcher.ts`)
+```typescript
+class MarketMatcher {
+  // Match markets by event similarity
+  async findMatches(polymarketMarketId: string): Promise<KalshiMarket[]>
+
+  // Store manual user-created matches
+  async createMatch(polymarketId: string, kalshiTicker: string): Promise<void>
+
+  // Get matched market
+  async getMatch(polymarketId: string): Promise<KalshiMarket | null>
+
+  // Fuzzy matching using question text
+  private calculateSimilarity(text1: string, text2: string): number
+
+  // Match by event tags/categories
+  private matchByCategory(polyCategory: string): Promise<KalshiMarket[]>
+}
+```
+
+2. **Arbitrage Detection Service** (`backend/src/arbitrage/arbitrage-detector.ts`)
+```typescript
+interface ArbitrageOpportunity {
+  id: string;
+  polymarket_market_id: string;
+  polymarket_question: string;
+  polymarket_yes_price: number; // 0-1
+  kalshi_ticker: string;
+  kalshi_question: string;
+  kalshi_yes_price: number; // 0-100 cents
+  spread_pct: number; // Positive = buy on Kalshi, sell on Polymarket
+  potential_profit_per_contract: number;
+  detected_at: number;
+  expires_at: number; // When to stop showing
+}
+
+class ArbitrageDetector {
+  // Find all current arbitrage opportunities
+  async detectOpportunities(minSpread: number = 2.0): Promise<ArbitrageOpportunity[]>
+
+  // Calculate spread accounting for fees
+  private calculateSpread(polyPrice: number, kalshiPrice: number): number
+
+  // Store opportunity in database
+  async storeOpportunity(opp: ArbitrageOpportunity): Promise<void>
+
+  // Check if opportunity still valid
+  async validateOpportunity(oppId: string): Promise<boolean>
+}
+```
+
+3. **Background Job** (`backend/src/jobs/arbitrage-jobs.ts`)
+   - Run every 30 seconds (configurable)
+   - Detect arbitrage opportunities
+   - Store in database
+   - Emit WebSocket event for real-time UI updates
+
+4. **Database Schema**
+```sql
+CREATE TABLE market_matches (
+  polymarket_market_id TEXT PRIMARY KEY,
+  kalshi_ticker TEXT NOT NULL,
+  confidence REAL NOT NULL, -- 0-1, how sure we are it's the same event
+  match_type TEXT NOT NULL, -- 'auto', 'manual'
+  created_at INTEGER NOT NULL,
+  verified BOOLEAN DEFAULT 0
+);
+
+CREATE TABLE arbitrage_opportunities (
+  id TEXT PRIMARY KEY,
+  polymarket_market_id TEXT NOT NULL,
+  polymarket_question TEXT NOT NULL,
+  polymarket_yes_price REAL NOT NULL,
+  kalshi_ticker TEXT NOT NULL,
+  kalshi_question TEXT NOT NULL,
+  kalshi_yes_price INTEGER NOT NULL,
+  spread_pct REAL NOT NULL,
+  potential_profit REAL NOT NULL,
+  detected_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  status TEXT DEFAULT 'active' -- 'active', 'expired', 'executed'
+);
+
+CREATE TABLE arbitrage_executions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id TEXT NOT NULL,
+  kalshi_order_id TEXT NOT NULL,
+  executed_at INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  execution_price INTEGER NOT NULL,
+  profit_loss REAL,
+  FOREIGN KEY (opportunity_id) REFERENCES arbitrage_opportunities(id),
+  FOREIGN KEY (kalshi_order_id) REFERENCES kalshi_orders(id)
+);
+```
+
+5. **API Routes** (`backend/src/routes/arbitrage-routes.ts`)
+```typescript
+GET    /api/arbitrage/opportunities      - Active opportunities
+GET    /api/arbitrage/opportunities/:id  - Single opportunity detail
+GET    /api/arbitrage/history            - Past opportunities
+POST   /api/arbitrage/execute            - Execute arb trade on Kalshi
+GET    /api/matching/events              - All matched markets
+POST   /api/matching/create              - Manually link markets
+DELETE /api/matching/:polymarketId       - Remove match
+GET    /api/matching/:polymarketId/kalshi - Get Kalshi market for Polymarket ID
+```
+
+#### Frontend Tasks:
+1. **Arbitrage Dashboard** (`frontend/src/pages/trading/ArbitrageDashboard.tsx`)
+   - Live table of opportunities (sorted by spread %)
+   - Columns: Event, Polymarket Price, Kalshi Price, Spread %, Potential Profit, Action
+   - Real-time updates via WebSocket
+   - Click row → Navigate to trade execution screen
+
+2. **Arbitrage Card Component** (`frontend/src/components/trading/ArbitrageCard.tsx`)
+   - Visual representation of spread
+   - Dual price display (Polymarket vs Kalshi)
+   - "Execute Trade" button
+   - Countdown timer (opportunity age)
+
+3. **Market Matcher Tool** (`frontend/src/components/matching/MarketMatcher.tsx`)
+   - Search Polymarket markets
+   - Search Kalshi markets
+   - Drag-and-drop to link
+   - Confidence indicator
+   - Manual verification toggle
+
+4. **Hooks**
+   - `useArbitrageOpportunities.ts` - Fetch & subscribe to opportunities
+   - `useMarketMatches.ts` - Fetch matched markets
+
+---
+
+### Phase 3: Manual Trading Interface (Week 3-4)
+**Goal**: Enable placing trades on Kalshi via UI
+
+#### Backend Tasks:
+1. **Order Validation** (`backend/src/trading/order-validator.ts`)
+```typescript
+interface OrderRequest {
+  ticker: string;
+  side: 'buy' | 'sell';
+  type: 'market' | 'limit';
+  quantity: number;
+  limitPrice?: number; // cents
+}
+
+class OrderValidator {
+  // Validate order before submission
+  async validate(order: OrderRequest): Promise<ValidationResult>
+
+  // Check if user has sufficient balance
+  async checkBalance(order: OrderRequest): Promise<boolean>
+
+  // Check if ticker exists and is tradeable
+  async checkMarket(ticker: string): Promise<boolean>
+
+  // Validate price is within reasonable bounds
+  private validatePrice(price: number): boolean
+
+  // Check position limits
+  async checkPositionLimits(order: OrderRequest): Promise<boolean>
+}
+```
+
+2. **Order Execution Service** (extend `kalshi-trading-service.ts`)
+   - `executeMarketOrder()` - Immediate execution
+   - `executeLimitOrder()` - Limit order placement
+   - `modifyOrder()` - Update order price/quantity
+   - Error handling and retry logic
+
+#### Frontend Tasks:
+1. **Order Form Component** (`frontend/src/components/trading/OrderForm.tsx`)
+   - Market selection (dropdown or search)
+   - Side selection (Buy YES / Sell YES / Buy NO / Sell NO)
+   - Order type (Market / Limit)
+   - Quantity input
+   - Limit price input (if limit order)
+   - Estimated cost display
+   - Fee calculation
+   - "Place Order" button with confirmation
+
+2. **Trading Dashboard** (`frontend/src/pages/trading/TradingDashboard.tsx`)
+   - **Layout**: 3-column
+     - Left: Arbitrage opportunities list
+     - Center: Selected market chart + order form
+     - Right: Open positions + pending orders
+   - Real-time price updates
+   - WebSocket integration
+
+3. **Order Confirmation Modal** (`frontend/src/components/trading/OrderConfirmation.tsx`)
+   - Order summary (ticker, side, qty, price)
+   - Estimated fees
+   - Total cost
+   - "Confirm" and "Cancel" buttons
+   - Warning for large orders
+
+4. **Trade Execution Feedback**
+   - Success toast notification
+   - Error toast with retry option
+   - Loading spinner during execution
+
+---
+
+### Phase 4: Bot Trading & Automation (Week 4-5)
+**Goal**: Automated trading based on signals
+
+#### Backend Tasks:
+1. **Trading Strategy Engine** (`backend/src/trading/strategy-engine.ts`)
+```typescript
+interface TradingStrategy {
+  id: string;
+  name: string;
+  enabled: boolean;
+  conditions: StrategyCondition[];
+  action: StrategyAction;
+  positionSize: number; // USD
+  stopLoss?: number; // %
+  takeProfit?: number; // %
+}
+
+interface StrategyCondition {
+  type: 'arbitrage' | 'whale_signal' | 'price_change' | 'volume_spike';
+  params: any;
+}
+
+interface StrategyAction {
+  type: 'buy' | 'sell';
+  market: string;
+  quantity: number;
+}
+
+class StrategyEngine {
+  // Evaluate all enabled strategies
+  async evaluateStrategies(): Promise<void>
+
+  // Check if strategy conditions met
+  private async checkConditions(strategy: TradingStrategy): Promise<boolean>
+
+  // Execute strategy action
+  private async executeAction(strategy: TradingStrategy): Promise<void>
+
+  // Risk management checks
+  private async checkRiskLimits(): Promise<boolean>
+}
+```
+
+2. **Arbitrage Bot** (`backend/src/trading/bots/arbitrage-bot.ts`)
+```typescript
+class ArbitrageBot {
+  private isRunning: boolean = false;
+  private maxPositionSize: number;
+  private minSpread: number;
+
+  async start(): Promise<void>
+  async stop(): Promise<void>
+
+  private async scanOpportunities(): Promise<void>
+  private async executeArbitrage(opp: ArbitrageOpportunity): Promise<void>
+
+  // Safety checks
+  private async validateExecution(opp: ArbitrageOpportunity): Promise<boolean>
+}
+```
+
+3. **Whale Signal Bot** (`backend/src/trading/bots/whale-signal-bot.ts`)
+```typescript
+interface WhaleSignal {
+  whale_address: string;
+  polymarket_market_id: string;
+  side: 'buy' | 'sell';
+  amount: number;
+  kalshi_equivalent: string | null;
+  confidence: number;
+}
+
+class WhaleSignalBot {
+  // Listen for large Polymarket trades
+  async onWhaleDetected(trade: Trade): Promise<void>
+
+  // Find equivalent Kalshi market
+  private async findKalshiMarket(polymarketId: string): Promise<string | null>
+
+  // Execute follow trade on Kalshi
+  private async followWhale(signal: WhaleSignal): Promise<void>
+
+  // Calculate position size based on whale trade
+  private calculatePositionSize(whaleAmount: number): number
+}
+```
+
+4. **Bot Manager** (`backend/src/trading/bot-manager.ts`)
+```typescript
+class BotManager {
+  private bots: Map<string, TradingBot>;
+
+  async startBot(botType: string): Promise<void>
+  async stopBot(botType: string): Promise<void>
+  async stopAllBots(): Promise<void>
+
+  getBotStatus(botType: string): BotStatus
+  getAllBotStatuses(): BotStatus[]
+
+  // Performance tracking
+  getBotPerformance(botType: string): BotPerformance
+}
+```
+
+5. **Database Schema**
+```sql
+CREATE TABLE trading_strategies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  enabled BOOLEAN DEFAULT 0,
+  strategy_type TEXT NOT NULL, -- 'arbitrage', 'whale_follow', 'momentum'
+  config TEXT NOT NULL, -- JSON
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE bot_executions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_type TEXT NOT NULL,
+  strategy_id TEXT,
+  signal_type TEXT NOT NULL,
+  kalshi_order_id TEXT NOT NULL,
+  executed_at INTEGER NOT NULL,
+  entry_price INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  exit_price INTEGER,
+  exit_at INTEGER,
+  profit_loss REAL,
+  FOREIGN KEY (kalshi_order_id) REFERENCES kalshi_orders(id)
+);
+
+CREATE TABLE bot_performance (
+  bot_type TEXT PRIMARY KEY,
+  total_trades INTEGER DEFAULT 0,
+  winning_trades INTEGER DEFAULT 0,
+  total_profit_loss REAL DEFAULT 0,
+  avg_trade_profit REAL DEFAULT 0,
+  max_drawdown REAL DEFAULT 0,
   sharpe_ratio REAL,
-  updated_at INTEGER
-);
-
-CREATE TABLE market_categories (
-  market_id TEXT,
-  category TEXT,
-  confidence REAL, -- 0-1 score for auto-tagging
-  PRIMARY KEY (market_id, category)
+  updated_at INTEGER NOT NULL
 );
 ```
 
-### Phase 2: Advanced Visualization (Weeks 3-4)
+6. **API Routes** (`backend/src/routes/bot-routes.ts`)
+```typescript
+GET    /api/bot/status                - Status of all bots
+POST   /api/bot/start                 - Start bot (requires type param)
+POST   /api/bot/stop                  - Stop bot
+POST   /api/bot/emergency-stop        - Stop all bots + cancel all orders
+GET    /api/bot/performance           - Bot performance metrics
+GET    /api/strategies                - List all strategies
+POST   /api/strategies                - Create strategy
+PUT    /api/strategies/:id            - Update strategy
+DELETE /api/strategies/:id            - Delete strategy
+POST   /api/strategies/:id/enable     - Enable strategy
+POST   /api/strategies/:id/disable    - Disable strategy
+```
 
-#### 2.1 Candlestick Charts
-- OHLCV visualization for any market
-- Multiple timeframes (5m to 1d)
-- Volume overlay
-- Zoom and pan controls
-- Tooltip with detailed data
+#### Frontend Tasks:
+1. **Bot Control Panel** (`frontend/src/pages/trading/BotControl.tsx`)
+   - List of available bots (Arbitrage Bot, Whale Follower Bot)
+   - Start/Stop buttons
+   - Running status indicators
+   - Emergency stop button (prominent, red)
+   - Performance metrics (Win rate, P&L, trades today)
 
-#### 2.2 Comparison Views
-- Overlay multiple markets on single chart
-- Normalize to percentage change for fair comparison
-- Color-coded lines for each market
-- Legend with current values
+2. **Strategy Builder** (`frontend/src/components/trading/StrategyBuilder.tsx`)
+   - Visual strategy creation interface
+   - Condition builder (drag-and-drop)
+   - Action configuration
+   - Backtest button
+   - Save/Load strategies
 
-#### 2.3 Category Heatmap
-- Visual grid showing all categories
-- Color intensity = volume or price change
-- Click to drill down into category
-- Tooltip with quick stats
+3. **Bot Performance Dashboard** (`frontend/src/pages/trading/BotPerformance.tsx`)
+   - Equity curve chart
+   - Trade history table
+   - Win/loss breakdown
+   - Sharpe ratio, max drawdown
+   - Trades by signal type (arbitrage, whale, etc.)
 
-#### 2.4 Correlation Matrix
-- Show relationships between markets
-- Color scale: red (negative) to green (positive)
-- Interactive: click to compare two markets
-- Export as image
-
-#### 2.5 Volume Distribution Charts
-- Pie chart: Volume by category
-- Bar chart: Volume by hour of day
-- Treemap: Hierarchical category breakdown
-- Trend line: Volume over time
-
-### Phase 3: Market Explorer & Screener (Week 5)
-
-#### 3.1 Advanced Market Screener
-Filter by:
-- Volume range (min/max)
-- Liquidity threshold
-- Price change (%, time period)
-- Volatility level
-- Category/tags
-- Closing date range
-- Platform (Polymarket, Kalshi, both)
-- Minimum trade size (filter out small markets)
-
-Sort by:
-- Volume (24h, 7d, 30d)
-- Price change
-- Momentum score
-- Number of traders
-- Market age
-- Closing urgency
-
-#### 3.2 Market Deep-Dive Page
-For a single market, show:
-- Large candlestick chart (prominent)
-- Key metrics cards (volatility, volume, traders)
-- Recent trades table (filterable by size)
-- Orderbook depth visualization
-- Related markets (same category)
-- Top traders in this market
-- Price distribution histogram
-- Time-of-day activity chart
-
-#### 3.3 Saved Searches & Alerts
-- Save screener configurations
-- Set alerts based on screener results
-- "Notify when a new market matches my criteria"
-- Export screener results as CSV
-
-### Phase 4: Comparative & Platform Analysis (Week 6)
-
-#### 4.1 Market Comparison Tool
-- Select 2-10 markets
-- Side-by-side metrics table
-- Overlaid price charts
-- Volume comparison
-- Trader overlap (how many trade in both?)
-- Performance summary
-
-#### 4.2 Polymarket vs Kalshi Dashboard
-- Total volume comparison (24h, 7d, 30d)
-- Market count by category
-- Average market size
-- Trader activity levels
-- Category presence (what does each platform focus on?)
-- Liquidity comparison
-
-#### 4.3 Category Performance Analysis
-- Historical performance by category
-- Seasonal trends (e.g., sports active on weekends)
-- Emerging vs declining categories
-- Volume concentration (is one market dominating?)
-
-### Phase 5: Portfolio Simulation & Strategy Testing (Week 7)
-
-#### 5.1 Virtual Portfolio Builder
-- "Add to portfolio" button on any market
-- Specify position size and entry price
-- Track P&L in real-time
-- Multiple portfolios (e.g., "Aggressive", "Conservative")
-- Share portfolios with others
-
-#### 5.2 Strategy Backtesting
-- Define rules (e.g., "Buy when momentum > X")
-- Run against historical data
-- Show P&L chart
-- Calculate win rate, avg return, max drawdown
-- Compare strategies side-by-side
-
-#### 5.3 Risk Analysis
-- Portfolio volatility
-- Correlation risk (too many similar markets?)
-- Concentration risk (too much in one market?)
-- Scenario analysis ("What if this market goes to 0?")
-
-### Phase 6: Polish & UX Enhancements (Week 8)
-
-#### 6.1 Professional Design System
-- Consistent color scheme (dark mode friendly)
-- Smooth animations and transitions
-- Responsive design (mobile-friendly charts)
-- Keyboard shortcuts (e.g., "/" to search)
-- Loading states and skeletons
-
-#### 6.2 Personalization
-- Save favorite markets
-- Customize dashboard layout (drag-and-drop widgets)
-- Dark/light theme toggle
-- Notification preferences
-- Export preferences (CSV, PNG, PDF)
-
-#### 6.3 Performance Optimization
-- Lazy load charts and heavy components
-- Virtual scrolling for large tables
-- Cache API responses aggressively
-- Debounce live updates
-- WebSocket for real-time data (don't poll)
-
-#### 6.4 Documentation & Onboarding
-- Interactive tour for new users
-- Tooltip explanations for metrics
-- Help modal with glossary
-- Example queries and analyses
-- Video tutorials (if desired)
+4. **Safety Controls**
+   - Confirmation modal before starting bot
+   - Daily loss limit setting
+   - Max position size setting
+   - "Pause on error" toggle
 
 ---
 
-## Technical Implementation Details
+### Phase 5: Enhanced Intelligence Integration (Week 5-6)
+**Goal**: Use Polymarket whale data to generate Kalshi trade signals
 
-### Backend Patterns
-
-#### 1. Service Layer Architecture
+#### Backend Tasks:
+1. **Whale Signal Generator** (`backend/src/intelligence/whale-signal-generator.ts`)
 ```typescript
-// analytics/market-analyzer.ts
-export class MarketAnalyzer {
-  async calculateMetrics(marketId: string, timeframe: string): Promise<MarketMetrics> {
-    const priceHistory = await this.db.getPriceHistory(marketId, timeframe);
-    return {
-      volatility: this.calculateVolatility(priceHistory),
-      momentum: this.calculateMomentum(priceHistory),
-      sharpeRatio: this.calculateSharpe(priceHistory),
-      // ... more metrics
-    };
-  }
+interface WhaleSignalResult {
+  signal_type: 'bullish' | 'bearish' | 'neutral';
+  confidence: number; // 0-1
+  kalshi_ticker: string;
+  recommended_action: 'buy' | 'sell' | 'hold';
+  reasoning: string;
+  whale_trades: Trade[];
+  cluster_data: any;
+}
 
-  private calculateVolatility(prices: PricePoint[]): number {
-    // Standard deviation of returns
-    const returns = prices.map((p, i) => i > 0 ? (p.close - prices[i-1].close) / prices[i-1].close : 0);
-    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    return Math.sqrt(variance);
-  }
+class WhaleSignalGenerator {
+  // Analyze recent whale activity on Polymarket
+  async generateSignal(polymarketMarketId: string): Promise<WhaleSignalResult>
 
-  private calculateMomentum(prices: PricePoint[]): number {
-    // Rate of change over period
-    if (prices.length < 2) return 0;
-    const oldPrice = prices[0].close;
-    const newPrice = prices[prices.length - 1].close;
-    return ((newPrice - oldPrice) / oldPrice) * 100;
-  }
+  // Detect whale clustering (multiple whales buying same side)
+  private async detectClustering(marketId: string): Promise<any>
+
+  // Calculate confidence based on whale history
+  private calculateConfidence(whales: WhaleActivity[]): number
+
+  // Match to Kalshi market
+  private async findKalshiEquivalent(polymarketId: string): Promise<string | null>
 }
 ```
 
-#### 2. Caching Strategy
-```typescript
-// aggregation/cache-manager.ts
-export class CacheManager {
-  private cache: Map<string, { data: any; expiry: number }> = new Map();
+2. **Alert to Signal Pipeline** (`backend/src/intelligence/alert-to-signal.ts`)
+   - Convert Polymarket alerts → Kalshi trade signals
+   - Filter by alert type (NEW_WHALE, LARGE_MOVEMENT)
+   - Enrich with market context
+   - Store as actionable signals
 
-  async get<T>(key: string, fetcher: () => Promise<T>, ttlSeconds: number = 300): Promise<T> {
-    const cached = this.cache.get(key);
-    if (cached && cached.expiry > Date.now()) {
-      return cached.data as T;
-    }
+3. **Signal Dashboard Service** (`backend/src/intelligence/signal-dashboard-service.ts`)
+   - Aggregate all signals (arbitrage, whale, technical)
+   - Rank by confidence and potential profit
+   - Filter expired signals
+   - Track signal performance (hit rate)
 
-    const data = await fetcher();
-    this.cache.set(key, { data, expiry: Date.now() + ttlSeconds * 1000 });
-    return data;
-  }
-}
+4. **Database Schema**
+```sql
+CREATE TABLE trade_signals (
+  id TEXT PRIMARY KEY,
+  signal_type TEXT NOT NULL, -- 'arbitrage', 'whale_follow', 'momentum'
+  source TEXT NOT NULL, -- 'polymarket_whale', 'price_spread', etc.
+  kalshi_ticker TEXT NOT NULL,
+  recommended_action TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  reasoning TEXT,
+  potential_profit REAL,
+  generated_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  status TEXT DEFAULT 'active' -- 'active', 'executed', 'expired'
+);
+
+CREATE TABLE signal_performance (
+  signal_id TEXT PRIMARY KEY,
+  executed BOOLEAN DEFAULT 0,
+  execution_price INTEGER,
+  outcome TEXT, -- 'win', 'loss', 'neutral'
+  profit_loss REAL,
+  closed_at INTEGER,
+  FOREIGN KEY (signal_id) REFERENCES trade_signals(id)
+);
 ```
 
-#### 3. Background Jobs
+5. **API Routes** (`backend/src/routes/signals-routes.ts`)
 ```typescript
-// jobs/historical-data-updater.ts
-import cron from 'node-cron';
-
-export function scheduleHistoricalDataJobs(client: PolymarketClient, db: DatabaseService) {
-  // Update 1-hour candles every hour
-  cron.schedule('0 * * * *', async () => {
-    console.log('[CRON] Updating 1-hour price history');
-    const markets = await client.getMarkets(100, true);
-    for (const market of markets) {
-      const history = await client.getPriceHistory(market.id, '1h');
-      await db.storePriceHistory(market.id, history, '1h');
-    }
-  });
-
-  // Update 5-minute candles every 5 minutes
-  cron.schedule('*/5 * * * *', async () => {
-    console.log('[CRON] Updating 5-minute price history');
-    const activeMarkets = await client.getVolumeLeaders(50);
-    for (const market of activeMarkets) {
-      const history = await client.getPriceHistory(market.id, '5m');
-      await db.storePriceHistory(market.id, history, '5m');
-    }
-  });
-
-  // Recalculate market metrics every 15 minutes
-  cron.schedule('*/15 * * * *', async () => {
-    console.log('[CRON] Recalculating market metrics');
-    const analyzer = new MarketAnalyzer(db);
-    const markets = await db.getAllActiveMarketIds();
-    for (const marketId of markets) {
-      const metrics = await analyzer.calculateMetrics(marketId, '24h');
-      await db.storeMarketMetrics(marketId, metrics);
-    }
-  });
-}
+GET    /api/signals                   - Active signals (all types)
+GET    /api/signals/arbitrage         - Arbitrage signals only
+GET    /api/signals/whale             - Whale-based signals
+GET    /api/signals/:id               - Single signal detail
+POST   /api/signals/:id/execute       - Execute signal (place trade)
+POST   /api/signals/:id/dismiss       - Dismiss signal
+GET    /api/signals/performance       - Signal accuracy metrics
 ```
 
-### Frontend Patterns
+#### Frontend Tasks:
+1. **Unified Signal Dashboard** (`frontend/src/pages/trading/SignalDashboard.tsx`)
+   - **Master feed**: All signals in one place
+   - Sortable by confidence, profit potential, signal type
+   - Filterable by type (arbitrage, whale, technical)
+   - Color-coded by urgency (time-sensitive = red)
+   - One-click execution
 
-#### 1. Custom Hooks for Data Fetching
-```typescript
-// hooks/useMarketMetrics.ts
-export function useMarketMetrics(marketId: string) {
-  const [metrics, setMetrics] = useState<MarketMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+2. **Signal Detail Modal** (`frontend/src/components/trading/SignalDetail.tsx`)
+   - Full reasoning explanation
+   - Underlying data (whale trades, price spreads)
+   - Related charts
+   - Execute trade button
+   - "Save for later" button
 
-  useEffect(() => {
-    async function fetchMetrics() {
-      try {
-        setLoading(true);
-        const data = await api.getMarketMetrics(marketId);
-        setMetrics(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchMetrics();
-  }, [marketId]);
+3. **Whale Activity Widget** (`frontend/src/components/intelligence/WhaleActivityWidget.tsx`)
+   - Real-time Polymarket whale trades
+   - Auto-highlight if Kalshi equivalent exists
+   - Click to view Kalshi market
+   - "Follow this whale" button
 
-  return { metrics, loading, error };
-}
+4. **Correlation View** (`frontend/src/pages/analytics/CrossPlatformCorrelation.tsx`)
+   - Show which Polymarket markets lead Kalshi markets
+   - Scatter plot of price movements
+   - Time lag analysis
+   - Identify profitable patterns
+
+---
+
+## Technical Architecture
+
+### Backend Services Layer
+```
+backend/
+├── src/
+│   ├── trading/
+│   │   ├── kalshi-trading-service.ts    - Kalshi API wrapper
+│   │   ├── order-validator.ts           - Pre-submission validation
+│   │   ├── strategy-engine.ts           - Strategy evaluation
+│   │   ├── bot-manager.ts               - Bot lifecycle management
+│   │   └── bots/
+│   │       ├── arbitrage-bot.ts
+│   │       └── whale-signal-bot.ts
+│   ├── matching/
+│   │   └── market-matcher.ts            - Cross-platform matching
+│   ├── arbitrage/
+│   │   └── arbitrage-detector.ts        - Spread detection
+│   ├── intelligence/
+│   │   ├── whale-signal-generator.ts    - Whale → Trade signals
+│   │   └── alert-to-signal.ts           - Alert conversion
+│   ├── routes/
+│   │   ├── kalshi-trading-routes.ts
+│   │   ├── arbitrage-routes.ts
+│   │   ├── bot-routes.ts
+│   │   └── signals-routes.ts
+│   └── jobs/
+│       ├── arbitrage-jobs.ts            - Background arb detection
+│       └── signal-generation-jobs.ts     - Periodic signal updates
 ```
 
-#### 2. Chart Component Pattern
-```typescript
-// components/charts/CandlestickChart.tsx
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip } from 'recharts';
-
-interface CandlestickChartProps {
-  data: OHLCVData[];
-  height?: number;
-  showVolume?: boolean;
-}
-
-export function CandlestickChart({ data, height = 400, showVolume = true }: CandlestickChartProps) {
-  return (
-    <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data}>
-        <XAxis dataKey="timestamp" tickFormatter={(ts) => formatTime(ts)} />
-        <YAxis yAxisId="price" domain={['dataMin', 'dataMax']} />
-        {showVolume && <YAxis yAxisId="volume" orientation="right" />}
-        <Tooltip content={<CustomCandlestickTooltip />} />
-
-        {/* Candlestick bodies */}
-        <Bar yAxisId="price" dataKey="candlestick" shape={<CandlestickShape />} />
-
-        {/* Volume bars */}
-        {showVolume && (
-          <Bar yAxisId="volume" dataKey="volume" fill="#8884d8" opacity={0.3} />
-        )}
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
+### Frontend Page Hierarchy
 ```
-
-#### 3. State Management (Context API or Zustand)
-```typescript
-// store/analyticsStore.ts
-import create from 'zustand';
-
-interface AnalyticsState {
-  selectedMarkets: string[];
-  timeRange: TimeRange;
-  selectedCategories: string[];
-  addMarket: (marketId: string) => void;
-  removeMarket: (marketId: string) => void;
-  setTimeRange: (range: TimeRange) => void;
-  toggleCategory: (category: string) => void;
-}
-
-export const useAnalyticsStore = create<AnalyticsState>((set) => ({
-  selectedMarkets: [],
-  timeRange: '24h',
-  selectedCategories: [],
-
-  addMarket: (marketId) =>
-    set((state) => ({ selectedMarkets: [...state.selectedMarkets, marketId] })),
-
-  removeMarket: (marketId) =>
-    set((state) => ({ selectedMarkets: state.selectedMarkets.filter(id => id !== marketId) })),
-
-  setTimeRange: (range) => set({ timeRange: range }),
-
-  toggleCategory: (category) =>
-    set((state) => ({
-      selectedCategories: state.selectedCategories.includes(category)
-        ? state.selectedCategories.filter(c => c !== category)
-        : [...state.selectedCategories, category]
-    })),
-}));
+frontend/
+├── src/
+│   ├── pages/
+│   │   ├── trading/
+│   │   │   ├── TradingDashboard.tsx      - Main trading view
+│   │   │   ├── ArbitrageDashboard.tsx    - Arbitrage opportunities
+│   │   │   ├── AccountDashboard.tsx      - Positions & balance
+│   │   │   ├── BotControl.tsx            - Bot management
+│   │   │   ├── BotPerformance.tsx        - Bot analytics
+│   │   │   └── SignalDashboard.tsx       - Unified signal feed
+│   │   ├── analytics/
+│   │   │   ├── AnalyticsDashboard.tsx    - Polymarket analytics
+│   │   │   ├── MarketExplorer.tsx        - Deep dive charts
+│   │   │   └── WhaleDetail.tsx           - Whale profile (NEW)
+│   │   └── intelligence/
+│   │       └── CrossPlatformCorrelation.tsx
+│   └── components/
+│       ├── trading/
+│       │   ├── KalshiLogin.tsx
+│       │   ├── OrderForm.tsx
+│       │   ├── OrderConfirmation.tsx
+│       │   ├── ArbitrageCard.tsx
+│       │   ├── PositionCard.tsx
+│       │   └── TradeHistoryTable.tsx
+│       ├── matching/
+│       │   └── MarketMatcher.tsx
+│       └── intelligence/
+│           └── WhaleActivityWidget.tsx
 ```
 
 ---
 
-## Data Quality & Filtering Strategy
+## Safety & Risk Management
 
-### Problem: Noisy Data
-Current issues:
-- Small trades ($1-$50) clutter the feed
-- Crypto markets dominate volume
-- Inactive markets show up in lists
-- Spam/test markets exist
+### Trading Safeguards
+1. **Manual Approval Required**
+   - Auto-trading OFF by default
+   - Confirmation for every bot start
+   - Emergency stop button always visible
 
-### Solution: Multi-Layer Filtering
+2. **Position Limits**
+   - Max position size per trade (configurable)
+   - Daily loss limit (auto-stops bot)
+   - Total exposure cap
 
-#### Backend Filtering (Server-Side)
-```typescript
-interface MarketFilter {
-  minVolume24h?: number;        // Default: $1000
-  minLiquidity?: number;         // Default: $500
-  minTradeSize?: number;         // Default: $500 for trades
-  excludeCategories?: string[];  // ['crypto', 'test']
-  activeOnly?: boolean;          // Default: true
-  minTraderCount?: number;       // Default: 5
-}
+3. **Demo Mode**
+   - Test strategies with Kalshi demo account
+   - Paper trading mode (simulated execution)
+   - Verify all logic before live trading
 
-class DataFilter {
-  static filterMarkets(markets: Market[], filter: MarketFilter): Market[] {
-    return markets.filter(m => {
-      if (filter.minVolume24h && m.volume < filter.minVolume24h) return false;
-      if (filter.minLiquidity && m.liquidity < filter.minLiquidity) return false;
-      if (filter.activeOnly && !m.active) return false;
-      if (filter.excludeCategories) {
-        const categories = this.detectCategories(m.question);
-        if (categories.some(cat => filter.excludeCategories!.includes(cat))) return false;
-      }
-      return true;
-    });
-  }
+4. **Error Handling**
+   - Graceful API failure recovery
+   - Order timeout detection
+   - Stuck order alerts
 
-  static filterTrades(trades: Trade[], filter: MarketFilter): Trade[] {
-    return trades.filter(t => {
-      const value = t.size * t.price;
-      if (filter.minTradeSize && value < filter.minTradeSize) return false;
-      if (filter.excludeCategories) {
-        const categories = this.detectCategories(t.title || '');
-        if (categories.some(cat => filter.excludeCategories!.includes(cat))) return false;
-      }
-      return true;
-    });
-  }
+5. **Audit Trail**
+   - Log every order (placed, modified, cancelled)
+   - Record decision reasoning
+   - Track performance by strategy
 
-  private static detectCategories(text: string): string[] {
-    const lower = text.toLowerCase();
-    const categories: string[] = [];
+### Security
+1. **Credential Storage**
+   - Encrypt Kalshi credentials at rest
+   - Never expose credentials to frontend
+   - Use environment variables
 
-    if (this.containsAny(lower, ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana'])) {
-      categories.push('crypto');
-    }
-    if (this.containsAny(lower, ['test', 'example', 'demo'])) {
-      categories.push('test');
-    }
-    if (this.containsAny(lower, ['trump', 'biden', 'election', 'president'])) {
-      categories.push('politics');
-    }
-    // ... more categories
+2. **API Key Rotation**
+   - Support for API key instead of email/password
+   - Token expiry handling
 
-    return categories;
-  }
-
-  private static containsAny(text: string, keywords: string[]): boolean {
-    return keywords.some(kw => text.includes(kw));
-  }
-}
-```
-
-#### Frontend Filtering (User Controls)
-```typescript
-// User preferences stored in localStorage or backend
-interface UserPreferences {
-  defaultMinVolume: number;
-  defaultMinTradeSize: number;
-  hiddenCategories: string[];
-  favoriteMarkets: string[];
-  alertThresholds: {
-    volume: number;
-    priceChange: number;
-    tradeSize: number;
-  };
-}
-```
-
----
-
-## Deployment & Scalability Considerations
-
-### Current Setup
-- Backend: Fly.io (Node.js + SQLite)
-- Frontend: Vercel (React SPA)
-
-### Scaling Challenges
-1. **SQLite limitations**: Single-writer, limited concurrency
-2. **API rate limits**: Polymarket/Kalshi may throttle
-3. **Compute-heavy analytics**: Volatility, correlations are expensive
-4. **Real-time updates**: WebSocket scaling
-
-### Recommended Upgrades
-
-#### Database Migration
-- **Option 1**: PostgreSQL on Fly.io (better concurrency)
-- **Option 2**: Supabase (managed Postgres + real-time)
-- **Option 3**: Keep SQLite, add Redis for caching
-
-#### Caching Layer
-- **Redis**: Cache expensive analytics results (5-15 min TTL)
-- **CDN**: Cache static market data via Cloudflare
-
-#### Background Workers
-- **Bull Queue**: Schedule analytics recalculation
-- **Separate worker dyno**: Offload heavy computations
-
-#### API Rate Limiting
-- **Client-side caching**: Cache API responses in frontend (React Query)
-- **Backend caching**: Cache Polymarket/Kalshi responses (5-15 min)
-- **Batch requests**: Fetch multiple markets in single call when possible
+3. **Rate Limiting**
+   - Respect Kalshi API limits
+   - Queue requests if needed
 
 ---
 
 ## Success Metrics
 
-### User Engagement
-- Time on site (target: 5+ minutes per session)
-- Pages per visit (target: 4+)
-- Return rate (target: 40% weekly)
-- Feature usage: % users using charts, screener, portfolio
+### Phase 1 (Account Integration)
+- ✅ Successful Kalshi login
+- ✅ Display account balance
+- ✅ Show open positions
+- ✅ View order history
 
-### Data Quality
-- Market coverage: % of active markets tracked
-- Data freshness: Average age of latest data point
-- Uptime: 99%+ availability
-- API error rate: <1%
+### Phase 2 (Arbitrage Detection)
+- ✅ Match 80% of Polymarket markets to Kalshi
+- ✅ Detect arbitrage opportunities >2% spread
+- ✅ Real-time updates (<5 second latency)
 
-### Performance
-- Page load time: <2 seconds
-- Chart render time: <500ms
-- API response time (p95): <1 second
-- WebSocket latency: <100ms
+### Phase 3 (Manual Trading)
+- ✅ Place market orders
+- ✅ Place limit orders
+- ✅ Cancel orders
+- ✅ <3 second order execution
 
----
+### Phase 4 (Bot Trading)
+- ✅ Arbitrage bot executes profitable trades
+- ✅ Whale follower bot generates signals
+- ✅ Bot stops on error
+- ✅ Performance tracking accurate
 
-## Priority Ranking
-
-### Must-Have (MVP)
-1. Enhanced time-series data collection & storage
-2. Market metrics calculation (volatility, momentum)
-3. Candlestick charts with multiple timeframes
-4. Category-based filtering and grouping
-5. Market screener with 5-10 filters
-6. Comparison view (2-4 markets)
-7. Better data filtering (hide crypto/small trades)
-
-### Should-Have (Version 1.0)
-1. Correlation matrix visualization
-2. Volume distribution charts (by category, time)
-3. Trader distribution analysis
-4. Market deep-dive page with all metrics
-5. Polymarket vs Kalshi comparison dashboard
-6. Saved searches and custom alerts
-7. Dark mode and responsive design
-
-### Nice-to-Have (Version 2.0)
-1. Portfolio simulation and tracking
-2. Strategy backtesting engine
-3. Advanced technical indicators (RSI, MACD, Bollinger Bands)
-4. Social features (shared portfolios, leaderboards)
-5. Mobile app (React Native)
-6. Export and reporting (PDF, CSV)
-7. AI-powered insights and predictions
-
----
-
-## Development Roadmap
-
-### Week 1-2: Backend Infrastructure
-- [ ] Add new database tables for price history, metrics, categories
-- [ ] Build MarketAnalyzer service (volatility, momentum, Sharpe)
-- [ ] Build TimeSeriesAggregator for OHLCV data
-- [ ] Create background jobs (cron) to update historical data
-- [ ] Add new API endpoints for analytics and metrics
-- [ ] Implement server-side filtering and caching
-
-### Week 3-4: Core Visualizations
-- [ ] Install react-financial-charts or similar library
-- [ ] Build CandlestickChart component with zoom/pan
-- [ ] Build MultiLineChart for market comparison
-- [ ] Build CategoryHeatmap with drill-down
-- [ ] Build VolumeDistributionChart (pie, bar, treemap)
-- [ ] Create TimeRangeSelector component (1h, 24h, 7d, 30d, custom)
-
-### Week 5: Market Explorer & Screener
-- [ ] Build MarketScreener with 10+ filters
-- [ ] Build MarketExplorerPage with deep-dive view
-- [ ] Add saved searches functionality
-- [ ] Implement CSV export for screener results
-- [ ] Add "Related Markets" section using category matching
-
-### Week 6: Comparative Analysis
-- [ ] Build ComparisonPage for side-by-side markets
-- [ ] Build PlatformOverviewPage (Polymarket vs Kalshi)
-- [ ] Build CategoryAnalysisPage with trends
-- [ ] Add correlation matrix visualization
-- [ ] Implement market relationship detection
-
-### Week 7: Portfolio Simulation
-- [ ] Build PortfolioBuilder component
-- [ ] Add database tables for portfolios and positions
-- [ ] Build PerformanceTracker with P&L chart
-- [ ] Implement strategy backtesting (simple rules)
-- [ ] Add risk analysis (concentration, correlation)
-
-### Week 8: Polish & Launch
-- [ ] Implement dark mode
-- [ ] Add keyboard shortcuts
-- [ ] Build interactive onboarding tour
-- [ ] Optimize performance (lazy loading, virtual scrolling)
-- [ ] Write documentation and help content
-- [ ] Conduct user testing and fix bugs
-- [ ] Deploy to production
-
----
-
-## Technical Debt & Maintenance
-
-### Current Technical Debt
-1. Alert system is overly complex for current needs
-2. Multiple monitoring services (monitor.ts, enhanced-monitor.ts) overlap
-3. Database queries not optimized (missing indexes)
-4. No automated testing
-5. Frontend components lack TypeScript strict mode
-6. Inconsistent error handling
-
-### Ongoing Maintenance Tasks
-- Weekly: Review and tune alert thresholds
-- Monthly: Audit API usage and optimize caching
-- Quarterly: Database cleanup (archive old data)
-- As needed: Update dependencies and security patches
-
-### Recommended Refactoring
-1. Consolidate monitoring services into single unified system
-2. Add database indexes for common queries
-3. Implement comprehensive error boundary in React
-4. Add unit tests for analytics calculations
-5. Set up CI/CD pipeline (GitHub Actions)
-
----
-
-## Resources & References
-
-### API Documentation
-- [Polymarket API Docs](https://docs.polymarket.com/)
-- [Polymarket Endpoints Reference](https://docs.polymarket.com/quickstart/reference/endpoints)
-- [Kalshi API Documentation](https://docs.kalshi.com/welcome)
-- [Kalshi Quick Start: Market Data](https://docs.kalshi.com/getting_started/quick_start_market_data)
-
-### Inspiration Sites
-- [TradingView](https://www.tradingview.com/) - Chart types, indicators, screeners
-- [Bloomberg Terminal](https://www.bloomberg.com/professional/products/bloomberg-terminal/) - Professional market analysis
-- [DeFi Rate Prediction Markets Tracker](https://defirate.com/prediction-markets/) - Polymarket/Kalshi comparison
-
-### Libraries & Tools
-- **Recharts**: React charts (already in use)
-- **D3.js**: Custom visualizations
-- **react-financial-charts**: Candlestick charts
-- **React Query**: Data fetching and caching
-- **Zustand**: Lightweight state management
-- **date-fns**: Date manipulation (already in use)
-- **node-cron**: Background job scheduling
-
-### Best Practices
-- [Data Visualization Best Practices (GoodData)](https://www.gooddata.com/blog/5-data-visualization-best-practices/)
-- [Financial Data Visualization (Flourish)](https://flourish.studio/blog/visualizing-financial-data/)
-- [Predictive Data Visualization Trends](https://www.storytellingwithcharts.com/blog/data-prediction-through-visualization/)
+### Phase 5 (Intelligence)
+- ✅ Whale signals have >60% win rate
+- ✅ Combined signal dashboard functional
+- ✅ Cross-platform correlation visible
 
 ---
 
 ## Next Steps
 
-1. **Review this plan** with stakeholders
-2. **Prioritize features** based on user feedback
-3. **Set up project management** (GitHub Projects, Jira, etc.)
-4. **Create design mockups** for new pages/components
-5. **Spike technical unknowns** (e.g., test charting libraries)
-6. **Start Week 1 development** following the roadmap
+**Immediate Priorities:**
+1. ✅ Update CLAUDE.md (DONE)
+2. ✅ Update CLAUDE.instructions (DONE)
+3. 🚀 **START Phase 1**: Kalshi account integration
+   - Enhance kalshi-client.ts with authentication
+   - Create kalshi-trading-service.ts
+   - Add database tables
+   - Build KalshiLogin component
+   - Create AccountDashboard page
 
----
-
-**Document Version**: 1.0
-**Last Updated**: 2026-01-11
-**Author**: Claude (AI Assistant)
-**Status**: Draft - Pending Review
+**Let's begin with Phase 1, Task 1: Enhanced Kalshi Client**
