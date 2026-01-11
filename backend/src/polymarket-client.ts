@@ -247,7 +247,7 @@ export class PolymarketClient {
    */
   async getPriceHistory(
     conditionId: string,
-    interval: '1m' | '5m' | '1h' | '1d' = '1h',
+    interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d' = '1h',
     startTs?: number,
     endTs?: number
   ): Promise<any[]> {

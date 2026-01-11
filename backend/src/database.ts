@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { Trade, WhaleActivity, Alert, MarketStats } from './types';
+import { Trade, WhaleActivity, Alert, MarketStats, PriceHistory, MarketMetrics, MarketCategory, MarketCorrelation } from './types';
 
 export class DatabaseService {
   private db: Database.Database;
@@ -77,6 +77,59 @@ export class DatabaseService {
         largest_trade_24h REAL,
         last_updated INTEGER
       );
+
+      -- Analytics tables
+      CREATE TABLE IF NOT EXISTS price_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        market_id TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        open REAL NOT NULL,
+        high REAL NOT NULL,
+        low REAL NOT NULL,
+        close REAL NOT NULL,
+        volume REAL NOT NULL,
+        interval TEXT NOT NULL,
+        UNIQUE(market_id, timestamp, interval)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_price_history_market ON price_history(market_id);
+      CREATE INDEX IF NOT EXISTS idx_price_history_timestamp ON price_history(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_price_history_interval ON price_history(interval);
+
+      CREATE TABLE IF NOT EXISTS market_metrics (
+        market_id TEXT PRIMARY KEY,
+        volatility_24h REAL,
+        momentum_24h REAL,
+        spread_pct REAL,
+        depth_score REAL,
+        sharpe_ratio REAL,
+        volume_trend REAL,
+        price_trend REAL,
+        trader_count_24h INTEGER,
+        updated_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_market_metrics_updated ON market_metrics(updated_at);
+
+      CREATE TABLE IF NOT EXISTS market_categories (
+        market_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        confidence REAL,
+        PRIMARY KEY (market_id, category)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_market_categories_category ON market_categories(category);
+
+      CREATE TABLE IF NOT EXISTS market_correlations (
+        market_id_1 TEXT NOT NULL,
+        market_id_2 TEXT NOT NULL,
+        correlation REAL NOT NULL,
+        lookback_hours INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (market_id_1, market_id_2)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_market_correlations_updated ON market_correlations(updated_at);
     `);
   }
 
@@ -255,6 +308,220 @@ export class DatabaseService {
     `);
 
     return stmt.all(limit) as Trade[];
+  }
+
+  // ========== Analytics Methods ==========
+
+  /**
+   * Store price history (OHLCV) data
+   */
+  storePriceHistory(priceHistory: PriceHistory[]): void {
+    const insert = this.db.transaction((prices: PriceHistory[]) => {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO price_history
+        (market_id, timestamp, open, high, low, close, volume, interval)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const p of prices) {
+        stmt.run(
+          p.market_id,
+          p.timestamp,
+          p.open,
+          p.high,
+          p.low,
+          p.close,
+          p.volume,
+          p.interval
+        );
+      }
+    });
+
+    insert(priceHistory);
+  }
+
+  /**
+   * Get price history for a market
+   */
+  getPriceHistory(
+    marketId: string,
+    interval: string,
+    startTime?: number,
+    endTime?: number,
+    limit: number = 1000
+  ): PriceHistory[] {
+    let query = `
+      SELECT * FROM price_history
+      WHERE market_id = ? AND interval = ?
+    `;
+    const params: any[] = [marketId, interval];
+
+    if (startTime) {
+      query += ` AND timestamp >= ?`;
+      params.push(startTime);
+    }
+    if (endTime) {
+      query += ` AND timestamp <= ?`;
+      params.push(endTime);
+    }
+
+    query += ` ORDER BY timestamp ASC LIMIT ?`;
+    params.push(limit);
+
+    const stmt = this.db.prepare(query);
+    return stmt.all(...params) as PriceHistory[];
+  }
+
+  /**
+   * Store or update market metrics
+   */
+  storeMarketMetrics(metrics: MarketMetrics): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO market_metrics
+      (market_id, volatility_24h, momentum_24h, spread_pct, depth_score,
+       sharpe_ratio, volume_trend, price_trend, trader_count_24h, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      metrics.market_id,
+      metrics.volatility_24h,
+      metrics.momentum_24h,
+      metrics.spread_pct,
+      metrics.depth_score,
+      metrics.sharpe_ratio,
+      metrics.volume_trend,
+      metrics.price_trend,
+      metrics.trader_count_24h,
+      metrics.updated_at
+    );
+  }
+
+  /**
+   * Get market metrics
+   */
+  getMarketMetrics(marketId: string): MarketMetrics | null {
+    const stmt = this.db.prepare(`
+      SELECT * FROM market_metrics WHERE market_id = ?
+    `);
+    return stmt.get(marketId) as MarketMetrics || null;
+  }
+
+  /**
+   * Get all market metrics
+   */
+  getAllMarketMetrics(limit: number = 100): MarketMetrics[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM market_metrics
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit) as MarketMetrics[];
+  }
+
+  /**
+   * Store market categories
+   */
+  storeMarketCategories(marketId: string, categories: Array<{ category: string; confidence: number }>): void {
+    // First delete existing categories for this market
+    const deleteStmt = this.db.prepare(`
+      DELETE FROM market_categories WHERE market_id = ?
+    `);
+    deleteStmt.run(marketId);
+
+    // Then insert new categories
+    const insert = this.db.transaction((cats: Array<{ category: string; confidence: number }>) => {
+      const stmt = this.db.prepare(`
+        INSERT INTO market_categories (market_id, category, confidence)
+        VALUES (?, ?, ?)
+      `);
+
+      for (const cat of cats) {
+        stmt.run(marketId, cat.category, cat.confidence);
+      }
+    });
+
+    insert(categories);
+  }
+
+  /**
+   * Get categories for a market
+   */
+  getMarketCategories(marketId: string): MarketCategory[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM market_categories
+      WHERE market_id = ?
+      ORDER BY confidence DESC
+    `);
+    return stmt.all(marketId) as MarketCategory[];
+  }
+
+  /**
+   * Get markets by category
+   */
+  getMarketsByCategory(category: string, minConfidence: number = 0.5): string[] {
+    const stmt = this.db.prepare(`
+      SELECT market_id FROM market_categories
+      WHERE category = ? AND confidence >= ?
+      ORDER BY confidence DESC
+    `);
+    return (stmt.all(category, minConfidence) as any[]).map(row => row.market_id);
+  }
+
+  /**
+   * Get all unique categories
+   */
+  getAllCategories(): string[] {
+    const stmt = this.db.prepare(`
+      SELECT DISTINCT category FROM market_categories
+      ORDER BY category
+    `);
+    return (stmt.all() as any[]).map(row => row.category);
+  }
+
+  /**
+   * Store market correlation
+   */
+  storeMarketCorrelation(correlation: MarketCorrelation): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO market_correlations
+      (market_id_1, market_id_2, correlation, lookback_hours, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      correlation.market_id_1,
+      correlation.market_id_2,
+      correlation.correlation,
+      correlation.lookback_hours,
+      correlation.updated_at
+    );
+  }
+
+  /**
+   * Get correlations for a market
+   */
+  getMarketCorrelations(marketId: string, minCorrelation: number = 0.5): MarketCorrelation[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM market_correlations
+      WHERE (market_id_1 = ? OR market_id_2 = ?)
+        AND ABS(correlation) >= ?
+      ORDER BY ABS(correlation) DESC
+    `);
+    return stmt.all(marketId, marketId, minCorrelation) as MarketCorrelation[];
+  }
+
+  /**
+   * Get all active market IDs (markets with recent data)
+   */
+  getAllActiveMarketIds(): string[] {
+    const stmt = this.db.prepare(`
+      SELECT DISTINCT market_id FROM price_history
+      WHERE timestamp > ?
+      LIMIT 1000
+    `);
+    const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
+    return (stmt.all(oneDayAgo) as any[]).map(row => row.market_id);
   }
 
   close(): void {

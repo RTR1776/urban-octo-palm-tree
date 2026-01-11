@@ -9,6 +9,7 @@ import { EnhancedMonitorService } from './enhanced-monitor';
 import { KalshiMonitorService } from './kalshi-monitor';
 import { ApiServer } from './server';
 import { NotificationService } from './notification-service';
+import { AnalyticsJobs } from './jobs/analytics-jobs';
 
 // Load environment variables - works for both dev (tsx) and production (compiled)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -46,6 +47,17 @@ async function main() {
 
   // Get WebSocket server for real-time broadcasts
   const wsServer = server.getWebSocketServer();
+
+  // Initialize Analytics Jobs
+  console.log('📈 Initializing Analytics Jobs...');
+  const analyticsJobs = new AnalyticsJobs(db, polymarketClient);
+  analyticsJobs.start();
+
+  // Run initial analytics data collection
+  console.log('📊 Running initial analytics data collection...');
+  await analyticsJobs.runAll().catch(error => {
+    console.error('Error in initial analytics run:', error);
+  });
 
   // Initialize Polymarket monitor
   let polymarketMonitor: MonitorService | EnhancedMonitorService;
@@ -90,6 +102,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = () => {
     console.log('Shutting down...');
+    analyticsJobs.stop();
     if ('destroy' in polymarketMonitor) {
       (polymarketMonitor as EnhancedMonitorService).destroy();
     }
