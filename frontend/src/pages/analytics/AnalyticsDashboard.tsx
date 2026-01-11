@@ -5,9 +5,13 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useFilteredMarkets, useCategories } from '../../hooks';
+import { useCorrelationMatrix } from '../../hooks/useCorrelationMatrix';
 import { MarketScreener } from '../../components/analytics/MarketScreener';
 import { MetricsCard } from '../../components/analytics/MetricsCard';
+import { CorrelationHeatmap } from '../../components/charts/CorrelationHeatmap';
+import { CategoryHeatmap } from '../../components/charts/CategoryHeatmap';
 import { MarketFilter, Market } from '../../types';
 
 export function AnalyticsDashboard() {
@@ -16,9 +20,11 @@ export function AnalyticsDashboard() {
     minLiquidity: 500,
     excludeCategories: ['crypto', 'test'],
   });
+  const [activeTab, setActiveTab] = useState<'correlation' | 'categories'>('correlation');
 
   const { markets, loading, error } = useFilteredMarkets(filter, 100);
   const { categories } = useCategories();
+  const { data: correlationData, loading: correlationLoading } = useCorrelationMatrix(10);
 
   // Calculate aggregate stats
   const totalVolume = markets.reduce((sum, m) => sum + m.volume, 0);
@@ -59,6 +65,69 @@ export function AnalyticsDashboard() {
             value={`$${avgLiquidity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             description="Per market"
           />
+        </div>
+
+        {/* Heatmap Visualizations */}
+        <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          {/* Tab Headers */}
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <div className="flex">
+              <button
+                onClick={() => setActiveTab('correlation')}
+                className={`px-6 py-4 font-medium text-sm transition-colors ${
+                  activeTab === 'correlation'
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Correlation Matrix
+              </button>
+              <button
+                onClick={() => setActiveTab('categories')}
+                className={`px-6 py-4 font-medium text-sm transition-colors ${
+                  activeTab === 'categories'
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Category Heatmap
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'correlation' && (
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  Market Correlation Matrix
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                  Correlation between top markets by volume. Green = positive correlation, Red = negative correlation.
+                </p>
+                <CorrelationHeatmap data={correlationData} loading={correlationLoading} height={500} />
+              </div>
+            )}
+
+            {activeTab === 'categories' && (
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  Category Volume Distribution
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                  Market activity by category. Cell size and color represent volume share.
+                </p>
+                <CategoryHeatmap categories={categories} loading={false} height={400} />
+              </div>
+            )}
+          </div>
+
+          {/* Helper text */}
+          <div className="px-6 pb-6 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              💡 Click on any market below to view detailed candlestick charts, correlation analysis, and technical indicators →
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -134,7 +203,10 @@ function MarketCard({ market }: { market: Market }) {
   const probability = market.tokens?.[0]?.price || 0;
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
+    <Link
+      to={`/market/${market.id}`}
+      className="block border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer"
+    >
       <div className="flex justify-between items-start mb-2">
         <h3 className="font-medium text-gray-900 dark:text-white flex-1 pr-4">
           {market.question}
@@ -171,6 +243,12 @@ function MarketCard({ market }: { market: Market }) {
           </p>
         </div>
       </div>
-    </div>
+
+      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+        <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+          View Charts & Analysis →
+        </span>
+      </div>
+    </Link>
   );
 }
